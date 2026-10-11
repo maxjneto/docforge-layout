@@ -1,0 +1,195 @@
+{
+  "format": "docforge/layout",
+  "version": 1,
+  "meta": { "title": "Proposta — Portal do cliente", "locale": "pt-BR" },
+  "surfaces": [
+    { "id": "a4", "kind": "page", "size": "A4", "margin": { "top": 56, "right": 48, "bottom": 56, "left": 48 } },
+    { "id": "carta", "kind": "page", "size": "Letter", "margin": 48 },
+    { "id": "continua", "kind": "continuous", "width": 860, "margin": 48 }
+  ],
+  "tokens": {
+    "color": { "primary": "#0f766e", "chart1": "#0f766e", "chart2": "#94a3b8" }
+  },
+  "styles": {
+    "document": {
+      "text.title-1": { "color": "$color.primary" },
+      "table.header": { "background": "$color.primary", "color": "$color.surface" }
+    }
+  },
+  "sections": [
+    {
+      "id": "s-capa",
+      "bands": [
+        {
+          "id": "r-capa",
+          "span": "auto",
+          "items": [
+            { "component": "capa-texto", "colStart": 1, "colSpan": 7 },
+            { "component": "capa-imagem", "colStart": 8, "colSpan": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s-escopo",
+      "name": "Escopo",
+      "bands": [
+        { "id": "r-escopo", "span": "auto", "items": [{ "component": "escopo", "colStart": 1, "colSpan": 12 }] },
+        { "id": "r-entregas", "span": "auto", "items": [{ "component": "entregas", "colStart": 1, "colSpan": 12 }] }
+      ]
+    },
+    {
+      "id": "s-investimento",
+      "name": "Investimento",
+      "bands": [
+        { "id": "r-inv-titulo", "span": "auto", "items": [{ "component": "inv-titulo", "colStart": 1, "colSpan": 12 }] },
+        { "id": "r-precos", "span": "auto", "items": [{ "component": "precos", "colStart": 1, "colSpan": 12 }] },
+        {
+          "id": "r-prazo",
+          "span": "auto",
+          "items": [
+            { "component": "cronograma", "colStart": 1, "colSpan": 7 },
+            { "component": "horas", "colStart": 8, "colSpan": 5 }
+          ]
+        },
+        { "id": "r-sep", "span": 4, "items": [{ "component": "sep", "colStart": 1, "colSpan": 12 }] },
+        { "id": "r-integracao", "span": "auto", "items": [{ "component": "integracao", "colStart": 1, "colSpan": 12 }] },
+        {
+          "id": "r-fechamento",
+          "span": "auto",
+          "items": [
+            { "component": "card-aceite", "colStart": 1, "colSpan": 6 },
+            { "component": "card-contato", "colStart": 7, "colSpan": 6 }
+          ]
+        }
+      ]
+    }
+  ],
+  "components": [
+    {
+      "id": "capa-texto",
+      "type": "text",
+      "content": {
+        "paragraphs": [
+          { "role": "caption", "text": "PROPOSTA COMERCIAL · OUTUBRO DE 2026" },
+          { "role": "title-1", "text": "Portal do cliente" },
+          "Um portal único onde os clientes da **Acme** acompanham pedidos, faturas e chamados, integrado ao ERP atual e ao atendimento.",
+          "Esta proposta cobre descoberta, desenvolvimento e implantação em 14 semanas."
+        ]
+      }
+    },
+    {
+      "id": "capa-imagem",
+      "type": "image",
+      "content": {
+        "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'><rect width='400' height='300' rx='16' fill='%23e6f4f1'/><rect x='40' y='48' width='320' height='28' rx='6' fill='%230f766e'/><rect x='40' y='100' width='200' height='16' rx='4' fill='%2394a3b8'/><rect x='40' y='128' width='260' height='16' rx='4' fill='%23cbd5e1'/><rect x='40' y='180' width='96' height='72' rx='8' fill='%230f766e' opacity='.25'/><rect x='152' y='180' width='96' height='72' rx='8' fill='%230f766e' opacity='.45'/><rect x='264' y='180' width='96' height='72' rx='8' fill='%230f766e' opacity='.7'/></svg>",
+        "alt": "Esboço do portal",
+        "width": 400,
+        "height": 300
+      }
+    },
+    {
+      "id": "escopo",
+      "type": "text",
+      "content": {
+        "paragraphs": [
+          { "role": "title-2", "text": "Escopo" },
+          "O portal substitui três canais que hoje não conversam: o e-mail de cobrança, a planilha de pedidos e o telefone do suporte. O cliente entra uma vez e vê tudo o que tem com a Acme.",
+          "Ficam fora deste escopo o aplicativo móvel nativo e a migração do histórico anterior a 2022."
+        ]
+      }
+    },
+    {
+      "id": "entregas",
+      "type": "list",
+      "props": { "marker": "number" },
+      "content": {
+        "items": [
+          { "text": "**Pedidos** — status em tempo real, segunda via de nota e rastreio.", "items": ["Integração com o módulo de vendas do ERP."] },
+          { "text": "**Faturas** — boletos, PIX e histórico de pagamentos." },
+          { "text": "**Chamados** — abertura, acompanhamento e avaliação do atendimento." },
+          { "text": "**Painel do gestor** — indicadores de uso e satisfação." }
+        ]
+      }
+    },
+    {
+      "id": "inv-titulo",
+      "type": "text",
+      "content": { "paragraphs": [{ "role": "title-2", "text": "Investimento e prazo" }] }
+    },
+    {
+      "id": "precos",
+      "type": "table",
+      "content": {
+        "columns": [
+          { "header": "Fase", "width": 3 },
+          { "header": "Semanas", "align": "right" },
+          { "header": "Valor", "align": "right", "width": 1.4 }
+        ],
+        "rows": [
+          ["Descoberta e protótipo navegável", "3", "R$ 48.000"],
+          ["Desenvolvimento — pedidos e faturas", "6", "R$ 126.000"],
+          ["Desenvolvimento — chamados e painel", "3", "R$ 72.000"],
+          ["Implantação, treinamento e operação assistida", "2", "R$ 34.000"],
+          ["**Total**", "**14**", "**R$ 280.000**"]
+        ]
+      },
+      "props": { "zebra": true }
+    },
+    {
+      "id": "cronograma",
+      "type": "timeline",
+      "content": {
+        "events": [
+          { "date": "Semana 1", "title": "Kick-off", "text": "Entrevistas com atendimento e financeiro." },
+          { "date": "Semana 3", "title": "Protótipo aprovado" },
+          { "date": "Semana 9", "title": "Pedidos e faturas em homologação" },
+          { "date": "Semana 14", "title": "Portal no ar", "text": "Operação assistida por 30 dias." }
+        ]
+      }
+    },
+    {
+      "id": "horas",
+      "type": "chart",
+      "content": {
+        "kind": "bar",
+        "categories": ["Desc.", "Ped./Fat.", "Cham.", "Impl."],
+        "series": [{ "name": "Horas", "values": [240, 640, 320, 180] }]
+      },
+      "props": { "values": true, "legend": false }
+    },
+    { "id": "sep", "type": "divider" },
+    {
+      "id": "card-aceite",
+      "type": "card",
+      "content": {
+        "eyebrow": "PRÓXIMO PASSO",
+        "title": "Aprovar a proposta",
+        "value": "R$ 280.000",
+        "text": "Valor fechado para as quatro fases. Validade de 30 dias.",
+        "footer": "Ver fases e valores →"
+      },
+      "props": { "href": "#precos" },
+      "style": { "background": "$color.subtle", "borderWidth": 0 }
+    },
+    {
+      "id": "card-contato",
+      "type": "card",
+      "content": {
+        "eyebrow": "CONTATO",
+        "title": "Equipe comercial",
+        "text": "Dúvidas sobre escopo, prazos ou condições de pagamento.",
+        "footer": "contato@example.com"
+      },
+      "props": { "href": "mailto:contato@example.com" }
+    },
+    {
+      "id": "integracao",
+      "type": "code",
+      "content": {
+        "language": "json",
+        "code": "POST /api/portal/pedidos/sync\n{\n  \"cliente\": \"acme-001\",\n  \"desde\": \"2026-01-01\",\n  \"incluir\": [\"notas\", \"rastreio\"]\n}"
+      }
+    }
+  ]
+}
