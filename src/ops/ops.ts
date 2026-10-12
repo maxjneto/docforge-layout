@@ -1,41 +1,11 @@
 import type { Component } from "../schema/components";
-import type { Band, LayoutDocument, Region } from "../schema/document";
+import type { Band, LayoutDocument } from "../schema/document";
 import type { StyleProps } from "../schema/style";
 import type { TokenOverrides } from "../schema/tokens";
 import { diag, type Diagnostic } from "../validate/diagnostics";
+import { parseOp, type Position } from "./schema";
 
-export interface Position {
-  section: string;
-  band: string;
-  colStart: number;
-  colSpan: number;
-  /** Create the band if it does not exist yet. */
-  newBand?: { span?: number | "auto"; after?: string };
-}
-
-export type Op =
-  | { op: "add"; component: Component; at: Position }
-  | { op: "place"; component: string; at: Position }
-  | {
-      op: "update";
-      component: string;
-      content?: unknown;
-      props?: Record<string, unknown>;
-      labels?: string[];
-      /** Merged into the component's own style; `null` clears it. */
-      style?: StyleProps | null;
-    }
-  | { op: "remove"; component: string }
-  | { op: "addSection"; section: { id: string; name?: string }; after?: string }
-  | { op: "addBand"; section: string; band: { id: string; span?: number | "auto" }; after?: string }
-  | { op: "setBand"; band: string; span: number | "auto" }
-  | { op: "moveBand"; band: string; section?: string; after?: string | null }
-  | { op: "removeBand"; band: string }
-  | { op: "setStyle"; layer: "document"; selector: string; style: StyleProps | null }
-  | { op: "setStyle"; layer: "label"; label: string; style: StyleProps | null }
-  | { op: "setRegion"; region: Region }
-  | { op: "removeRegion"; region: string }
-  | { op: "setTokens"; tokens: TokenOverrides };
+export type { Op, Position } from "./schema";
 
 export interface OpsResult {
   doc: LayoutDocument;
@@ -108,14 +78,25 @@ function placeAt(doc: LayoutDocument, componentId: string, at: Position, errors:
   touched.bands.push(band.id);
 }
 
-/** Apply operations to a copy of the document. Pure: the input is never mutated. */
-export function applyOps(input: LayoutDocument, ops: Op[]): OpsResult {
+/**
+ * Apply operations to a copy of the document. Pure: the input is never mutated.
+ * Each op's shape is checked first (callers send JSON), so a malformed op is an
+ * `invalid-op` error, not an exception.
+ */
+export function applyOps(input: LayoutDocument, ops: readonly unknown[]): OpsResult {
   const doc = structuredClone(input);
   const errors: Diagnostic[] = [];
   const touched: OpsResult["touched"] = { components: [], bands: [] };
   const component = (id: string) => doc.components.find((c) => c.id === id);
 
-  ops.forEach((op, index) => {
+  ops.forEach((raw, index) => {
+    const parsed = parseOp(raw);
+    if (!parsed.ok) {
+      const name = (raw as { op?: unknown } | null)?.op;
+      errors.push(opError(`op ${index + 1}${typeof name === "string" ? ` (${name})` : ""}: ${parsed.message}`));
+      return;
+    }
+    const op = parsed.op;
     const before = errors.length;
     switch (op.op) {
       case "add": {

@@ -54,6 +54,24 @@ describe("operations", () => {
     expect(r.diagnostics[0]?.code).toBe("invalid-op");
     expect((base as { components: unknown[] }).components).toHaveLength(1);
   });
+
+  it("checks each op's shape and names the bad field instead of throwing", () => {
+    const cases: [unknown, RegExp][] = [
+      [{ op: "teleport" }, /"op" must be one of add, place/],
+      [{ op: "add", component: { id: "x", type: "text", content: { paragraphs: ["x"] } } }, /op 1 \(add\): invalid fields — at:/],
+      [{ op: "place", component: "t", at: { section: "s1", band: "b1", colStart: 0, colSpan: 2 } }, /at\.colStart/],
+      [{ op: "setBand", band: "b1", span: "tall" }, /span/],
+      [{ op: "setStyle", layer: "label", selector: "x", style: {} }, /label|selector/],
+      [{ op: "remove", component: "t", extra: true }, /extra/],
+      ["remove t", /"op" must be one of/],
+    ];
+    for (const [op, message] of cases) {
+      const r = engine.apply(base, [op]);
+      expect(r.ok, JSON.stringify(op)).toBe(false);
+      expect(r.diagnostics[0]?.code).toBe("invalid-op");
+      expect(r.diagnostics[0]?.message).toMatch(message);
+    }
+  });
 });
 
 describe("map", () => {

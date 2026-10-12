@@ -1,7 +1,7 @@
 import type { FontRegistry } from "./fonts/registry";
 import { layoutDocument, type LayoutResult } from "./layout/engine";
 import { documentMap, type DocumentMap, type MapOptions } from "./map/map";
-import { applyOps, type Op } from "./ops/ops";
+import { applyOps } from "./ops/ops";
 import { renderLayout, toHtmlPage, type RenderedDocument } from "./render/document";
 import { DocumentSchema, type LayoutDocument } from "./schema/document";
 import { diag, sortDiagnostics, type Diagnostic } from "./validate/diagnostics";
@@ -26,7 +26,8 @@ export interface Engine {
   ): { layout: LayoutResult; rendered: RenderedDocument; page: string };
   validate(doc: unknown, surfaceId?: string): Diagnostic[];
   map(doc: unknown, options: MapOptions & { surfaceId?: string }): DocumentMap;
-  apply(doc: unknown, ops: Op[], options?: { surfaceId?: string }): ApplyResult;
+  /** `ops` may come straight from JSON: each one is shape-checked (see `OpSchema`). */
+  apply(doc: unknown, ops: readonly unknown[], options?: { surfaceId?: string }): ApplyResult;
 }
 
 /** The library's entry point: everything runs against one font registry. */

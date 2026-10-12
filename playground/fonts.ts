@@ -1,21 +1,15 @@
-import { BUNDLED_FONTS, FontRegistry } from "@docforge/layout";
+import { BUNDLED_FONTS, createBrowserRegistry, type FontRegistry } from "@docforge/layout";
 
-// Vite serves the repo's font files; the registry measures with the same bytes the iframe renders with.
+// Vite serves the repo's font files under hashed names; the registry measures with the
+// same bytes the iframe renders with.
 const urls = import.meta.glob("../fonts/*.ttf", { query: "?url", import: "default", eager: true }) as Record<string, string>;
 
-export async function loadRegistry(): Promise<FontRegistry> {
-  const registry = new FontRegistry();
-  const sources = await Promise.all(
-    BUNDLED_FONTS.map(async (font) => {
-      const relative = urls[`../fonts/${font.file}`];
-      if (!relative) throw new Error(`Font file missing: ${font.file}`);
-      const url = new URL(relative, window.location.href).href;
-      const response = await fetch(url);
-      return { family: font.family, weight: font.weight, style: font.style, data: await response.arrayBuffer(), url };
-    }),
-  );
-  registry.register(sources);
-  return registry;
+export function loadRegistry(): Promise<FontRegistry> {
+  return createBrowserRegistry((file) => {
+    const url = urls[`../fonts/${file}`];
+    if (!url) throw new Error(`Font file missing: ${file}`);
+    return url;
+  });
 }
 
 /** Wait until every bundled face is usable inside `doc` (an iframe document). */

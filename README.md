@@ -68,11 +68,31 @@ result.diagnostics; // what is wrong and how to fix it
 result.map;         // level-1 map of the result
 ```
 
-In the browser, load the bundled fonts with `fetchBundledFonts(urlOfFontsFolder)` and register them in a `FontRegistry`; the rendered CSS includes the matching `@font-face` rules.
+### In the browser
+
+Fonts are files, so the browser has to fetch them. `createBrowserRegistry(location)` fetches every bundled font and registers it; the rendered page's `@font-face` rules point at the same URLs, so what was measured is what is drawn. `location` is a folder URL that serves the files under their own names, a map from file name to URL, or a function. Bundlers rename assets, so with one use the map:
+
+```ts
+import { createBrowserRegistry, createEngine } from "@docforge/layout";
+import interRegular from "@docforge/layout/fonts/Inter-Regular.ttf?url"; // Vite; one import per file in BUNDLED_FONTS
+// …
+const registry = await createBrowserRegistry({ "Inter-Regular.ttf": interRegular, /* … */ });
+const engine = createEngine({ registry });
+```
+
+Show the page in an iframe (`srcdoc`). It runs no script, so `sandbox="allow-same-origin allow-modals"` is enough to load the fonts and call `print()`.
+
+### Over HTTP (any language)
+
+```sh
+npx docforge-layout serve --port 8002 --host 127.0.0.1
+```
+
+`GET /health`, and `POST` with a JSON body: `/validate {doc}`, `/apply {doc, ops}`, `/map {doc, level, components?}`, `/render {doc, grid?}` (every route takes an optional `surface`). It keeps no state and has no auth: run it on a private network next to the service that owns the documents. In Node, `createLayoutServer()` / `createLayoutHandler()` from `@docforge/layout/server` give you the same thing in your own process.
 
 Map levels: **0** outline (sections and components), **1** the grid (bands, columns, alerts per page), **2** one component in full (area, need, content, every style property with its origin, diagnostics).
 
-Operations: `add`, `place`, `update`, `remove`, `addSection`, `addBand`, `setBand`, `moveBand`, `removeBand`, `setStyle` (document selector or label), `setRegion`, `removeRegion`, `setTokens`.
+Operations: `add`, `place`, `update`, `remove`, `addSection`, `addBand`, `setBand`, `moveBand`, `removeBand`, `setStyle` (document selector or label), `setRegion`, `removeRegion`, `setTokens`. They usually arrive as JSON, so each one is checked against `OpSchema` first: a malformed op is an `invalid-op` diagnostic naming the field (`op 2 (add): invalid fields — at.colSpan: …`), never an exception.
 
 ## Develop
 

@@ -1,12 +1,13 @@
 export { createEngine, type Engine, type ApplyResult } from "./engine";
 
 export { FontRegistry, cssFamily, type FontSource, type Face } from "./fonts/registry";
-export { BUNDLED_FONTS, fetchBundledFonts } from "./fonts/bundled";
+export { BUNDLED_FONTS, fetchBundledFonts, createBrowserRegistry, type BundledFontFile, type FontLocation } from "./fonts/bundled";
 
 export { layoutDocument, surfaceSize, type LayoutResult, type PageLayout, type Box, type ComponentGeometry, type BandGeometry, type BandPlacement } from "./layout/engine";
 export { renderLayout, toHtmlPage, type RenderedDocument } from "./render/document";
 export { documentMap, type DocumentMap, type MapLevel, type MapOptions } from "./map/map";
 export { applyOps, type Op, type Position, type OpsResult } from "./ops/ops";
+export { OpSchema, OP_SCHEMAS, OP_NAMES, PositionSchema, parseOp, type OpName } from "./ops/schema";
 
 export { DocumentSchema, GridSchema, SurfaceSchema, SectionSchema, BandSchema, RegionSchema, StylesSchema, defaultGrid, PAGE_SIZES } from "./schema/document";
 export type { LayoutDocument, Grid, Surface, Section, Band, BandItem, Region, Styles } from "./schema/document";
