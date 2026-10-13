@@ -11,7 +11,7 @@ import { TokenOverridesSchema } from "../schema/tokens";
  */
 
 const Ref = z.string().min(1);
-const Span = z.union([z.number().int().min(1), z.literal("auto")]);
+const Span = z.union([z.number().int().min(1), z.literal("auto")], { error: 'expected a whole number of rows (1 or more) or "auto"' });
 const After = z.string().min(1).nullable();
 
 export const PositionSchema = z

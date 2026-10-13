@@ -60,7 +60,7 @@ describe("operations", () => {
       [{ op: "teleport" }, /"op" must be one of add, place/],
       [{ op: "add", component: { id: "x", type: "text", content: { paragraphs: ["x"] } } }, /op 1 \(add\): invalid fields — at:/],
       [{ op: "place", component: "t", at: { section: "s1", band: "b1", colStart: 0, colSpan: 2 } }, /at\.colStart/],
-      [{ op: "setBand", band: "b1", span: "tall" }, /span/],
+      [{ op: "setBand", band: "b1", span: "tall" }, /span: expected a whole number of rows/],
       [{ op: "setStyle", layer: "label", selector: "x", style: {} }, /label|selector/],
       [{ op: "remove", component: "t", extra: true }, /extra/],
       ["remove t", /"op" must be one of/],
