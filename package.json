@@ -1,7 +1,7 @@
 {
   "name": "@docforge/layout",
-  "version": "0.2.0",
-  "description": "DocForge document format: components on a grid, measured without a browser, rendered to HTML and print-ready pages.",
+  "version": "0.3.0",
+  "description": "DocForge document format: components placed on a unit grid, measured without a browser, rendered to HTML and print-ready pages.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,6 +22,10 @@
     "./server": {
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
     }
   },
   "files": [

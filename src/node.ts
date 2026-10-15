@@ -17,6 +17,12 @@ export function loadBundledFonts(): FontSource[] {
   });
 }
 
+/** Paths of the bundled font files (for rasterizers such as resvg that load fonts themselves). */
+export function bundledFontFiles(): string[] {
+  const dir = new URL("../fonts/", import.meta.url);
+  return BUNDLED_FONTS.map((f) => fileURLToPath(new URL(f.file, dir)));
+}
+
 /** A registry with every bundled font already loaded. */
 export function createNodeRegistry(): FontRegistry {
   const registry = new FontRegistry();

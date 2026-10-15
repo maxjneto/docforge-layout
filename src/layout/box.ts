@@ -5,8 +5,6 @@ import type { Prepared } from "./types";
 export interface BoxOptions {
   /** 0 for the first (or only) piece of a component. */
   piece: number;
-  /** Also carry the anchor of the component's section (its first box). */
-  sectionAnchor: boolean;
 }
 
 /**
@@ -33,7 +31,6 @@ export function renderBox(p: Prepared, x: number, y: number, w: number, hgt: num
   const layers =
     (semantic ? h("div", { class: "dfl-sr" }, semantic) : "") + (hasSemantic ? h("div", { "aria-hidden": "true" }, visual) : visual);
 
-  const anchors = options.sectionAnchor ? h("span", { id: anchorId(p.section.id), style: { position: "absolute", left: 0, top: 0 } }) : "";
   const rawHref = (p.component as { props?: { href?: string } }).props?.href;
   const href = rawHref ? safeHref(rawHref) : null;
   // The semantic layer already holds the accessible link; this one is for the pointer and the PDF.
@@ -55,6 +52,6 @@ export function renderBox(p: Prepared, x: number, y: number, w: number, hgt: num
         boxSizing: "border-box",
       }),
     },
-    anchors + layers + link,
+    layers + link,
   );
 }

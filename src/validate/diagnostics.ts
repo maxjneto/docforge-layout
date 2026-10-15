@@ -3,15 +3,12 @@ export type Severity = "error" | "warning" | "info";
 export type DiagnosticCode =
   | "schema"
   | "duplicate-id"
-  | "unknown-component"
   | "unplaced-component"
-  | "placed-twice"
   | "unknown-surface"
-  | "column-out-of-range"
-  | "column-overlap"
-  | "overflow"
-  | "band-too-tall"
-  | "unknown-region-target"
+  | "unknown-page"
+  | "out-of-page"
+  | "too-tall"
+  | "page-limit"
   | "unknown-token"
   | "wrong-token-group"
   | "raw-value"
@@ -29,16 +26,22 @@ export type DiagnosticCode =
   | "table-row-length"
   | "unknown-size"
   | "invalid-op"
+  | "fit-result"
+  | "fit-failed"
+  | "text-replaced"
   | "unknown-link-target"
   | "unsafe-link";
+
+/** Codes that make a document unusable: a write that leads to one of these is refused. */
+export const BLOCKING_CODES: ReadonlySet<DiagnosticCode> = new Set(["schema", "duplicate-id", "invalid-op"]);
 
 export interface Diagnostic {
   severity: Severity;
   code: DiagnosticCode;
   message: string;
   component?: string;
-  section?: string;
-  band?: string;
+  /** 1-based page, for problems tied to a page rather than a component. */
+  page?: number;
   data?: Record<string, unknown>;
   suggestions?: string[];
 }
@@ -56,7 +59,7 @@ export function diag(
 export function dedupe(list: Diagnostic[]): Diagnostic[] {
   const seen = new Set<string>();
   return list.filter((d) => {
-    const key = `${d.code}|${d.component ?? ""}|${d.band ?? ""}|${d.message}`;
+    const key = `${d.code}|${d.component ?? ""}|${d.page ?? ""}|${d.message}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

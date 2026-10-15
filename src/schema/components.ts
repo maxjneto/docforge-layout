@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { InlineSchema, TextRoleSchema } from "./content";
+import { PlacementSchema } from "./placement";
 import { StylePropsSchema } from "./style";
 import { HrefSchema, SrcSchema } from "./values";
 
 const base = {
-  id: z.string().min(1),
+  id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, "ids use letters, digits, - and _"),
+  /** Where the component sits. A component without `at` is kept but not drawn. */
+  at: PlacementSchema.optional(),
   labels: z.array(z.string()).optional(),
   style: StylePropsSchema.optional(),
 };

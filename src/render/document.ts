@@ -1,7 +1,7 @@
 import type { FontRegistry } from "../fonts/registry";
 import type { LayoutResult, PageLayout } from "../layout/engine";
 import { colorValue } from "../style/tokens";
-import { absStyle, h, px, styleString, text } from "./html";
+import { absStyle, cssSafe, h, px, styleString, text } from "./html";
 import { SR_ONLY_CSS } from "./semantic";
 
 export interface RenderedDocument {
@@ -15,7 +15,8 @@ export interface RenderedDocument {
 
 const GRID_COLUMN = "rgba(31,79,216,0.07)";
 const GRID_COLUMN_EDGE = "rgba(31,79,216,0.25)";
-const GRID_BAND = "rgba(197,34,31,0.65)";
+const GRID_UNIT = "rgba(31,79,216,0.06)";
+const GRID_MOVED = "rgba(197,34,31,0.75)";
 const GRID_BOX = "rgba(30,142,62,0.8)";
 const GRID_PAGE = "rgba(31,79,216,0.85)";
 
@@ -25,44 +26,48 @@ function chip(x: number, y: number, label: string, color: string, anchor: "left"
   return h("div", { class: "dfl-grid-chip", style: { [anchor]: x, top: y, color, borderColor: color } }, text(label));
 }
 
-/** A see-through layer showing the columns, every band and every component area. Never printed. */
+/** A see-through layer with the unit grid, the guide columns and every component box. Never printed. */
 function gridOverlay(result: LayoutResult, page: PageLayout): string {
-  const { grid, columnWidth } = result;
+  const { grid, guides } = result;
+  const unit = grid.unit;
   const c = page.content;
   let shapes = "";
   // Labels go last so no outline crosses them.
   let labels = "";
   const numbersY = Math.max(2, c.y - 34);
-  for (let i = 0; i < grid.columns; i++) {
-    const x = c.x + i * (columnWidth + grid.columnGap);
+  shapes += h("div", {
+    style: absStyle(c.x, c.y, result.units.cols * unit, page.rows * unit, {
+      backgroundImage: `linear-gradient(to right, ${GRID_UNIT} 1px, transparent 1px), linear-gradient(to bottom, ${GRID_UNIT} 1px, transparent 1px)`,
+      backgroundSize: `${unit}px ${unit}px`,
+    }),
+  });
+  for (const g of guides) {
+    const x = c.x + g.x * unit;
     shapes += h("div", {
-      style: absStyle(x, c.y, columnWidth, c.height, {
+      style: absStyle(x, c.y, g.w * unit, c.height, {
         background: GRID_COLUMN,
         borderLeft: `1px dashed ${GRID_COLUMN_EDGE}`,
         borderRight: `1px dashed ${GRID_COLUMN_EDGE}`,
         boxSizing: "border-box",
       }),
     });
-    labels += h("div", { class: "dfl-grid-col", style: { left: x, top: numbersY, width: columnWidth } }, text(String(i + 1)));
+    labels += h("div", { class: "dfl-grid-col", style: { left: x, top: numbersY, width: g.w * unit } }, text(String(g.col)));
   }
   labels += chip(
     c.x - 6,
     numbersY - 18 < 0 ? page.height - 18 : numbersY - 18,
-    `page ${r1(page.width)}×${r1(page.height)} · content ${r1(c.width)}×${r1(c.height)} · col ${r1(columnWidth)} · gap ${grid.columnGap} · row ${grid.rowUnit}`,
+    `page ${page.index + 1} · ${r1(page.width)}×${r1(page.height)} · ${result.units.cols}×${page.rows} units of ${unit}px · ${grid.columns} guides`,
     GRID_PAGE,
   );
-  for (const band of page.bands) {
-    shapes += h("div", { style: absStyle(c.x - 6, band.y, c.width + 12, band.height, { border: `1px dashed ${GRID_BAND}`, boxSizing: "border-box" }) });
-    const part = band.piece !== undefined ? ` · part ${band.piece + 1}` : "";
-    labels += chip(c.x - 6, band.y - 16, `${band.section} · ${band.id} · ${band.rows} rows · ${r1(band.height)}px${part}`, GRID_BAND);
-  }
   for (const box of page.boxes) {
     const geo = result.components[box.component];
-    shapes += h("div", { style: absStyle(box.x, box.y, box.width, box.height, { outline: `1.5px solid ${GRID_BOX}`, outlineOffset: -1 }) });
-    const cols = geo ? ` · ${geo.colStart}–${geo.colStart + geo.colSpan - 1}` : "";
-    const overflow = geo?.overflow ? ` · +${geo.overflow}px` : "";
-    const label = `${box.component}${cols} · ${r1(box.width)}×${r1(box.height)}${overflow}`;
-    labels += chip(page.width - box.x - box.width, box.y + box.height - 16, label, geo?.overflow ? GRID_BAND : GRID_BOX, "right");
+    const piece = geo ? (geo.pieces[box.piece ?? 0] ?? geo.box) : null;
+    const moved = !!geo && geo.shifted > 0 && (box.piece ?? 0) === 0;
+    const color = moved ? GRID_MOVED : GRID_BOX;
+    shapes += h("div", { style: absStyle(box.x, box.y, box.width, box.height, { outline: `1.5px solid ${color}`, outlineOffset: -1 }) });
+    const where = piece ? ` · x${piece.x} y${piece.y} w${piece.w} h${piece.h}` : "";
+    const note = moved ? ` · ↓${geo?.shifted}${geo?.pushedBy ? ` by ${geo.pushedBy}` : ""}` : "";
+    labels += chip(page.width - box.x - box.width, box.y + box.height - 16, `${box.component}${where}${note}`, color, "right");
   }
   return h("div", { class: "dfl-grid", "aria-hidden": "true" }, shapes + labels);
 }
@@ -107,9 +112,14 @@ export function renderLayout(
   return { html: h("div", { class: "dfl-doc" }, pagesHtml), css, pages: result.pages.length, width, height };
 }
 
-/** A standalone HTML page (for printing, embedding in an iframe or saving to a file). */
-export function toHtmlPage(rendered: RenderedDocument, title = "Document"): string {
+/**
+ * A standalone HTML page (for printing, embedding in an iframe or saving to a file).
+ * `backdrop` is the colour around the pages on screen (never printed); `null` leaves it
+ * transparent, for an iframe that should show its host's background.
+ */
+export function toHtmlPage(rendered: RenderedDocument, title = "Document", options: { backdrop?: string | null } = {}): string {
+  const backdrop = options.backdrop === undefined ? "#e9ebee" : options.backdrop === null ? "transparent" : cssSafe(options.backdrop);
   // The page shell is static markup; the only dynamic parts (title, CSS, body) are escaped or built by h().
   // eslint-disable-next-line no-restricted-syntax
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${text(title)}</title><style>html,body{margin:0;background:#e9ebee}@media print{html,body{background:none}}\n${rendered.css}</style></head><body>${rendered.html}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${text(title)}</title><style>html,body{margin:0;background:${backdrop}}@media print{html,body{background:none}}\n${rendered.css}</style></head><body>${rendered.html}</body></html>`;
 }

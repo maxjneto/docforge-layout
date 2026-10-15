@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { doc, engine } from "./helpers";
+import { engine, single } from "./helpers";
 
-const one = (component: unknown, colSpan = 12, span: number | "auto" = "auto") =>
-  engine.layout(doc({ bands: [{ id: "b1", span, items: [{ component: "c", colStart: 1, colSpan }] }], components: [component] }));
+/** One component alone, `cols` of the 12 guide columns wide (87 units), with an optional fixed height in rows. */
+const one = (component: Record<string, unknown>, cols = 12, h?: number) => engine.layout(single(component, Math.max(1, Math.round((cols * 87) / 12) - 1), h));
 const codes = (r: { diagnostics: { code: string }[] }) => r.diagnostics.map((d) => d.code);
 
 describe("components", () => {
@@ -13,9 +13,11 @@ describe("components", () => {
     expect(codes(tooWide)).toContain("kpi-value-too-wide");
   });
 
-  it("chart reports a plot area that is too small", () => {
+  it("a chart with too small a height grows to its minimum plot instead of overflowing", () => {
     const r = one({ id: "c", type: "chart", content: { kind: "bar", categories: ["a", "b"], series: [{ name: "x", values: [1, 2] }] } }, 4, 6);
-    expect(codes(r)).toEqual(expect.arrayContaining(["chart-too-small", "overflow"]));
+    expect(r.components.c?.grew).toBeGreaterThan(0);
+    expect(r.components.c?.box.h).toBeGreaterThan(6);
+    expect(codes(r)).not.toContain("chart-too-small");
   });
 
   it("chart truncates category labels that do not fit their slot", () => {

@@ -1,16 +1,15 @@
 import { DocumentSchema, defaultGrid, type Grid } from "../schema/document";
 import { mergeTokens } from "../schema/tokens";
 import { dedupe, diag, sortDiagnostics, type Diagnostic } from "../validate/diagnostics";
-import { sizeBands } from "./bands";
 import { checkLinks } from "./links";
 import { measureComponents } from "./measure";
-import { paginate } from "./paginate";
+import { placeComponents } from "./place";
 import { checkStructure } from "./structure";
 import { frameFor, pickSurface } from "./surface";
 import type { LayoutOptions, LayoutResult } from "./types";
 
-export { surfaceSize } from "./surface";
-export type { BandGeometry, BandPlacement, Box, ComponentGeometry, LayoutOptions, LayoutResult, PageLayout } from "./types";
+export { surfaceSize, guidesFor } from "./surface";
+export type { Box, ComponentGeometry, Guide, LayoutOptions, LayoutResult, PageLayout, UnitBox } from "./types";
 
 const DEFAULT_LOCALE = "en-US";
 
@@ -23,9 +22,9 @@ function schemaDiagnostics(error: { issues: { path: PropertyKey[]; message: stri
 }
 
 /**
- * Lay a document out on one surface, in stages: schema → structure → measure → band
- * heights → pages → links. Never throws on document problems: everything wrong with
- * the document comes back as diagnostics.
+ * Lay a document out on one surface, in stages: schema → structure → measure →
+ * place (collisions and pages) → links. Never throws on document problems:
+ * everything wrong with the document comes back as diagnostics.
  */
 export function layoutDocument(input: unknown, options: LayoutOptions): LayoutResult {
   const diagnostics: Diagnostic[] = [];
@@ -37,11 +36,11 @@ export function layoutDocument(input: unknown, options: LayoutOptions): LayoutRe
       surface: null,
       grid: defaultGrid,
       tokens: mergeTokens(undefined),
-      columnWidth: 0,
+      units: { cols: 0, rows: null },
+      guides: [],
       contentWidth: 0,
       pages: [],
       components: {},
-      bands: {},
       diagnostics: sortDiagnostics(schemaDiagnostics(parsed.error)),
     };
   }
@@ -53,11 +52,10 @@ export function layoutDocument(input: unknown, options: LayoutOptions): LayoutRe
 
   const structure = checkStructure(doc, diagnostics);
   const surface = pickSurface(doc, options.surfaceId, diagnostics);
-  const frame = frameFor(surface, grid);
+  const frame = frameFor(surface, grid, doc);
   const { prepared, links } = measureComponents({ doc, structure, frame, tokens, registry: options.registry, locale }, diagnostics);
-  const { bands, components } = sizeBands(doc, prepared, frame, diagnostics);
-  const pages = paginate(doc, prepared, bands, components, frame, diagnostics);
-  checkLinks(links, doc, structure, diagnostics);
+  const { pages, components } = placeComponents(prepared, frame, diagnostics);
+  checkLinks(links, structure, diagnostics);
 
   return {
     ok: true,
@@ -65,11 +63,11 @@ export function layoutDocument(input: unknown, options: LayoutOptions): LayoutRe
     surface,
     grid,
     tokens,
-    columnWidth: frame.columnWidth,
+    units: { cols: frame.cols, rows: Number.isFinite(frame.rows) ? frame.rows : null },
+    guides: frame.guides,
     contentWidth: frame.contentWidth,
     pages,
     components,
-    bands,
     diagnostics: sortDiagnostics(dedupe(diagnostics)),
   };
 }

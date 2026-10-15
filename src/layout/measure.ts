@@ -1,5 +1,6 @@
 import { defOf, type ComponentContext } from "../components";
-import type { LayoutDocument } from "../schema/document";
+import type { LayoutDocument, Region } from "../schema/document";
+import type { Placement } from "../schema/placement";
 import type { ResolvedStyle } from "../schema/style";
 import type { Tokens } from "../schema/tokens";
 import type { FontRegistry } from "../fonts/registry";
@@ -41,13 +42,20 @@ export interface MeasureInput {
   locale: string;
 }
 
+/** Regions apply to components whose declared top-left corner falls inside them. */
+function regionsFor(regions: Region[], at: Placement): Region[] {
+  return regions.filter(
+    (r) => (r.page === undefined || r.page === at.page) && at.x >= r.x && at.x < r.x + r.w && at.y >= r.y && at.y < r.y + r.h,
+  );
+}
+
 /**
- * Check every placement against the grid, run the style cascade and lay each placed
- * component out once at its area width (height still unknown).
+ * Fit every placed component into the page width, run the style cascade and lay each
+ * one out once at its box width (height still unknown).
  */
-export function measureComponents(input: MeasureInput, out: Diagnostic[]): { prepared: Map<string, Prepared>; links: Link[] } {
+export function measureComponents(input: MeasureInput, out: Diagnostic[]): { prepared: Prepared[]; links: Link[] } {
   const { doc, structure, frame, tokens, registry, locale } = input;
-  const { grid } = frame;
+  const unit = frame.grid.unit;
   const regions = doc.styles?.regions ?? [];
   const cascadeBase = {
     tokens,
@@ -62,103 +70,87 @@ export function measureComponents(input: MeasureInput, out: Diagnostic[]): { pre
   };
   const reportedFonts = new Set<string>();
   const links: Link[] = [];
-  const prepared = new Map<string, Prepared>();
+  const prepared: Prepared[] = [];
 
-  for (const section of doc.sections) {
-    for (const band of section.bands) {
-      const ranges: { id: string; start: number; end: number }[] = [];
-      for (const item of band.items) {
-        const component = structure.components.get(item.component);
-        if (!component || structure.placedAt.get(item.component) !== band.id) continue;
-
-        let { colStart, colSpan } = item;
-        if (colStart + colSpan - 1 > grid.columns) {
-          out.push(
-            diag("error", "column-out-of-range", `"${component.id}" spans columns ${colStart}–${colStart + colSpan - 1}; the grid has ${grid.columns}.`, {
-              component: component.id,
-              band: band.id,
-              suggestions: [`Use colStart + colSpan - 1 ≤ ${grid.columns}.`],
-            }),
-          );
-          colStart = Math.min(colStart, grid.columns);
-          colSpan = grid.columns - colStart + 1;
-        }
-        const end = colStart + colSpan - 1;
-        for (const other of ranges) {
-          if (colStart <= other.end && end >= other.start) {
-            out.push(
-              diag("error", "column-overlap", `"${component.id}" (cols ${colStart}–${end}) overlaps "${other.id}" (cols ${other.start}–${other.end}) in band "${band.id}".`, {
-                component: component.id,
-                band: band.id,
-              }),
-            );
-          }
-        }
-        ranges.push({ id: component.id, start: colStart, end });
-
-        const cascade: CascadeInput = {
-          ...cascadeBase,
-          regions: regions.filter(
-            (r) => r.section === section.id && (!r.bands || r.bands.includes(band.id)) && (!r.cols || (colStart <= r.cols[1] && end >= r.cols[0])),
-          ),
-          componentLabels: component.labels ?? [],
-          componentStyle: component.style,
-        };
-        // One resolution per (component, variant): issues are reported once, origins reused by the map.
-        const resolved = new Map<string, ResolvedResult>();
-        const resolve = (variant?: string): ResolvedResult => {
-          const key = variant ?? "";
-          const cached = resolved.get(key);
-          if (cached) return cached;
-          const result = resolveStyle(cascade, component.type, variant);
-          for (const issue of result.issues) out.push(issueToDiagnostic(issue, component.id));
-          const family = result.style.fontFamily;
-          if (!registry.hasFamily(family) && !reportedFonts.has(family)) {
-            reportedFonts.add(family);
-            out.push(
-              diag("warning", "unknown-font", `Font family "${family}" is not registered; "${registry.families()[0] ?? "?"}" is used instead.`, {
-                component: component.id,
-                suggestions: [`Use one of: ${registry.families().join(", ")}.`],
-              }),
-            );
-          }
-          resolved.set(key, result);
-          return result;
-        };
-        const styleOf = (variant?: string): ResolvedStyle => resolve(variant).style;
-
-        const def = defOf(component.type);
-        const base = resolve();
-        const inset = def.decorated ? base.style.padding + base.style.borderWidth : 0;
-        const areaWidth = frame.areaWidthOf(colSpan);
-        const ctx: ComponentContext = {
-          registry,
-          tokens,
-          style: styleOf,
-          runStyle: { ...runStyle, onLink: (href: string) => links.push({ component: component.id, href }) },
-          width: Math.max(1, areaWidth - inset * 2),
-          height: null,
-          locale,
-        };
-        const laid = def.layout(component as never, ctx);
-        const boxHref = (component as { props?: { href?: string } }).props?.href;
-        if (boxHref) links.push({ component: component.id, href: boxHref });
-
-        prepared.set(component.id, {
-          component,
-          section,
-          band,
-          colStart,
-          colSpan,
-          areaWidth,
-          inset,
-          decoration: base.style,
-          laid,
-          ctx,
-          styleWithOrigin: base.withOrigin,
-        });
-      }
+  structure.placed.forEach((component, order) => {
+    const declared = component.at as Placement;
+    let { x, w } = declared;
+    let clamped = false;
+    if (x + w > frame.cols) {
+      clamped = true;
+      if (w > frame.cols) {
+        w = frame.cols;
+        x = 0;
+      } else x = frame.cols - w;
+      out.push(
+        diag("warning", "out-of-page", `"${component.id}" spans x ${declared.x}–${declared.x + declared.w}; the page is ${frame.cols} units wide. Drawn at x ${x}, w ${w}.`, {
+          component: component.id,
+          data: { declared: { x: declared.x, w: declared.w }, drawn: { x, w }, cols: frame.cols },
+          suggestions: [`Place it with x + w ≤ ${frame.cols}.`],
+        }),
+      );
     }
-  }
+
+    const cascade: CascadeInput = {
+      ...cascadeBase,
+      regions: regionsFor(regions, declared),
+      componentLabels: component.labels ?? [],
+      componentStyle: component.style,
+    };
+    // One resolution per (component, variant): issues are reported once, origins reused by the map.
+    const resolved = new Map<string, ResolvedResult>();
+    const resolve = (variant?: string): ResolvedResult => {
+      const key = variant ?? "";
+      const cached = resolved.get(key);
+      if (cached) return cached;
+      const result = resolveStyle(cascade, component.type, variant);
+      for (const issue of result.issues) out.push(issueToDiagnostic(issue, component.id));
+      const family = result.style.fontFamily;
+      if (!registry.hasFamily(family) && !reportedFonts.has(family)) {
+        reportedFonts.add(family);
+        out.push(
+          diag("warning", "unknown-font", `Font family "${family}" is not registered; "${registry.families()[0] ?? "?"}" is used instead.`, {
+            component: component.id,
+            suggestions: [`Use one of: ${registry.families().join(", ")}.`],
+          }),
+        );
+      }
+      resolved.set(key, result);
+      return result;
+    };
+    const styleOf = (variant?: string): ResolvedStyle => resolve(variant).style;
+
+    const def = defOf(component.type);
+    const base = resolve();
+    const inset = def.decorated ? base.style.padding + base.style.borderWidth : 0;
+    const areaWidth = w * unit;
+    const ctx: ComponentContext = {
+      registry,
+      tokens,
+      style: styleOf,
+      runStyle: { ...runStyle, onLink: (href: string) => links.push({ component: component.id, href }) },
+      width: Math.max(1, areaWidth - inset * 2),
+      height: null,
+      locale,
+    };
+    const laid = def.layout(component as never, ctx);
+    const boxHref = (component as { props?: { href?: string } }).props?.href;
+    if (boxHref) links.push({ component: component.id, href: boxHref });
+
+    prepared.push({
+      component,
+      declared,
+      x,
+      w,
+      clamped,
+      areaWidth,
+      inset,
+      decoration: base.style,
+      laid,
+      ctx,
+      styleWithOrigin: base.withOrigin,
+      order,
+    });
+  });
   return { prepared, links };
 }

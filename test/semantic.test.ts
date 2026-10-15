@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { markerLabel } from "../src/components/list";
-import { doc, engine, example } from "./helpers";
+import { at, doc, engine, example } from "./helpers";
 
-const render = (components: unknown[], locale?: string) => {
-  const d = doc({
-    bands: components.map((c, i) => ({ id: `b${i}`, span: "auto" as const, items: [{ component: (c as { id: string }).id, colStart: 1, colSpan: 12 }] })),
-    components,
-  });
+/** Components stacked top to bottom, full width (the layout pushes each below the previous). */
+const render = (components: Record<string, unknown>[], locale?: string) => {
+  const d = doc({ components: components.map((c) => ({ ...c, at: at(0, 0, 87) })) });
   return engine.render(locale ? { ...d, meta: { locale } } : d).rendered.html;
 };
 

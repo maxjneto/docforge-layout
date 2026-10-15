@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { cssSafe, esc, h, safeHref, safeSrc, styleString } from "../src/render/h";
-import { doc, engine } from "./helpers";
+import { at, doc, engine } from "./helpers";
 
 const text = (paragraphs: unknown[], extra: Record<string, unknown> = {}) =>
-  doc({
-    bands: [{ id: "b", span: "auto", items: [{ component: "t", colStart: 1, colSpan: 12 }] }],
-    components: [{ id: "t", type: "text", content: { paragraphs }, ...extra }],
-  });
+  doc({ components: [{ id: "t", type: "text", content: { paragraphs }, at: at(0, 0, 87), ...extra }] });
 
 /** Rendered HTML must never contain an executable link, an event handler or a raw script tag. */
 function assertInert(html: string) {
@@ -65,10 +62,7 @@ describe("documents with hostile content", () => {
     expect(run.ok).toBe(false);
     expect(run.diagnostics[0]?.code).toBe("schema");
     const card = engine.layout(
-      doc({
-        bands: [{ id: "b", span: "auto", items: [{ component: "c", colStart: 1, colSpan: 4 }] }],
-        components: [{ id: "c", type: "card", content: { title: "x" }, props: { href: "javascript:alert(1)" } }],
-      }),
+      doc({ components: [{ id: "c", type: "card", content: { title: "x" }, props: { href: "javascript:alert(1)" }, at: at(0, 0, 28) }] }),
     );
     expect(card.ok).toBe(false);
   });
@@ -97,18 +91,12 @@ describe("documents with hostile content", () => {
   it("escapes text content everywhere it is drawn", () => {
     const hostile = '<img src=x onerror=alert(1)><script>alert(2)</script>';
     const d = doc({
-      bands: [
-        { id: "b1", span: "auto", items: [{ component: "t", colStart: 1, colSpan: 12 }] },
-        { id: "b2", span: "auto", items: [{ component: "tab", colStart: 1, colSpan: 12 }] },
-        { id: "b3", span: "auto", items: [{ component: "ch", colStart: 1, colSpan: 12 }] },
-        { id: "b4", span: "auto", items: [{ component: "k", colStart: 1, colSpan: 4 }, { component: "c", colStart: 5, colSpan: 8 }] },
-      ],
       components: [
-        { id: "t", type: "text", content: { paragraphs: [hostile, { role: "quote", text: hostile }] } },
-        { id: "tab", type: "table", content: { columns: [hostile], rows: [[hostile]] } },
-        { id: "ch", type: "chart", content: { kind: "bar", categories: [hostile], series: [{ name: hostile, values: [1] }] } },
-        { id: "k", type: "kpi", content: { value: "1", label: hostile, delta: hostile } },
-        { id: "c", type: "card", content: { eyebrow: hostile, title: hostile, text: hostile, footer: hostile } },
+        { id: "t", type: "text", content: { paragraphs: [hostile, { role: "quote", text: hostile }] }, at: at(0, 0, 87) },
+        { id: "tab", type: "table", content: { columns: [hostile], rows: [[hostile]] }, at: at(0, 20, 87) },
+        { id: "ch", type: "chart", content: { kind: "bar", categories: [hostile], series: [{ name: hostile, values: [1] }] }, at: at(0, 40, 87) },
+        { id: "k", type: "kpi", content: { value: "1", label: hostile, delta: hostile }, at: at(0, 80, 28) },
+        { id: "c", type: "card", content: { eyebrow: hostile, title: hostile, text: hostile, footer: hostile }, at: at(30, 80, 57) },
       ],
     });
     const { page } = engine.render(d, { grid: true });
@@ -118,10 +106,7 @@ describe("documents with hostile content", () => {
 
   it("an image with a hostile src fails the schema", () => {
     const r = engine.layout(
-      doc({
-        bands: [{ id: "b", span: "auto", items: [{ component: "i", colStart: 1, colSpan: 6 }] }],
-        components: [{ id: "i", type: "image", content: { src: "javascript:alert(1)", alt: "x", width: 10, height: 10 } }],
-      }),
+      doc({ components: [{ id: "i", type: "image", content: { src: "javascript:alert(1)", alt: "x", width: 10, height: 10 }, at: at(0, 0, 43) }] }),
     );
     expect(r.ok).toBe(false);
   });

@@ -2,7 +2,7 @@ import { cssFamilyValue } from "../fonts/registry";
 import type { TextBlock, TextStyle } from "../text/layout";
 import { absStyle, h, px, safeHref, text, type Style } from "./h";
 
-export { anchorId, esc, h, px, safeHref, safeSrc, text, absStyle, styleString, type Style } from "./h";
+export { anchorId, cssSafe, esc, h, px, safeHref, safeSrc, text, absStyle, styleString, type Style } from "./h";
 
 export function fontStyle(style: TextStyle, face: { family: string; weight: number; style: string }): Style {
   return {

@@ -6,10 +6,12 @@ An agent never has to look at the page. It reads a text map of the document, ask
 
 ## How it works
 
-- **The document is JSON.** Sections → bands (rows of the grid, with an id and a height in grid row units, or `auto`) → components placed by column (`colStart`, `colSpan` on a 12-column grid). A component's area is `colSpan × band height`.
+- **The document is JSON** (`version: 2`). Every component has a position `at: { page, x, y, w, h? }` in **grid units**: square cells of `grid.unit` px (8 by default), counted from the top-left corner of the page's content area. The page size only decides how many units fit (A4 with 40px margins: 89 × 130). `grid.columns` and `grid.gutter` draw **guides** — the editor snaps to them and ops may place by `cols: [1, 7]` — but never limit where a component goes.
+- **Content decides the height.** `h` is a minimum: a component whose content needs more grows. Whatever a growing (or overlapping) box **invades** moves down below it, `grid.gap` units apart, in a chain; nothing else moves. Pushes are computed, never stored, so a box returns to its place when what pushed it shrinks.
+- **The library paginates.** A box that crosses the bottom of a page splits between lines/rows when it can (text, list, table, code, steps, timeline — tables repeat their header) or moves whole to the next page; either way it pushes what it meets there. `maxPages` on a surface is reported when exceeded, never refused.
 - **The library measures text itself.** It reads the same font files the browser renders with (fontkit), decides every line break, and draws each line ready-made (`white-space: pre`). The browser never re-wraps, so a height computed here is the height on screen and in print.
-- **The library paginates.** Pages are fixed-size boxes and every component is absolutely positioned; printing to PDF only reproduces them. A band that does not fit moves to the next page; a band holding a single text, list, table, code, steps or timeline component splits between lines/rows (tables repeat their header).
-- **Styles cascade with origins.** Tokens (`$color.primary`, `$size.m`…) → presets → `document` → grid **regions** → **labels** → the component. Every resolved value knows where it came from, so an agent can change it at the right level.
+- **Styles cascade with origins.** Tokens (`$color.primary`, `$size.m`…) → presets → `document` → **regions** (rectangles of the grid) → **classes** (`labels`) → the component. Every resolved value knows where it came from, so an agent can change it at the right level.
+- **Version 1 documents** (sections → bands) convert with `upgradeDocument(doc, engine)` or `docforge-layout upgrade`.
 
 ## Components
 
@@ -55,18 +57,27 @@ import { createNodeRegistry } from "@docforge/layout/node";
 
 const engine = createEngine({ registry: createNodeRegistry() });
 
-engine.map(doc, { level: 1 }).text;          // grid map for an agent
-engine.render(doc, { grid: true });           // same render with the grid drawn over it (never printed)
-engine.validate(doc);                         // diagnostics
+engine.map(doc, { level: 1 }).text;           // settings, every page drawn in ASCII, a table per page
+engine.render(doc, { grid: true });            // the render with units, guides and boxes drawn over it (never printed)
 const { page } = engine.render(doc, { surfaceId: "a4" }); // standalone HTML, print-ready
 
+// Nothing below saves anything: compute first, then decide.
+engine.measure(component, { widths: [40, 60], cols: [[1, 6]], doc }); // how tall it would be at each width
+engine.find(doc, { text: "receita", page: 1, rect: { page: 1, x: 0, y: 0, w: 40, h: 30 } });
+engine.calibrate(doc, { component: "kpi-a" }, [{ fontSize: "$size.l" }, { fontSize: "$size.xl" }]); // variants side by side, none applied
 const result = engine.apply(doc, [
-  { op: "place", component: "texto-intro", at: { section: "s2", band: "r-vendas", colStart: 1, colSpan: 7 } },
+  { op: "add", component: { id: "nps", type: "kpi", content: { value: "61", label: "NPS" } }, at: { below: "titulo", cols: [1, 3] } },
 ]);
-result.ok;          // false if anything it touched does not fit
-result.diagnostics; // what is wrong and how to fix it
+result.ok;          // false only for a malformed op, an unknown id or an invalid document
+result.changes;     // what the layout did on its own: "kpi-margem moved down 4 (pushed by nps)"
+result.diagnostics; // problems, with suggestions
+result.summary;     // a few lines: what the ops changed, what moved on its own, problems, free rows per page
 result.map;         // level-1 map of the result
 ```
+
+Map levels: **0** outline (components per page), **1** settings + each page drawn (one character per unit across; rows that repeat are left out) + a table per page (id, type, x, y, w, h, classes, content summary, what the layout did), **2** components in full (declared vs drawn position, content, every style property with its origin, diagnostics). Level 1 takes `pages` and `draw: false`.
+
+Operations: `add`, `place`, `update`, `edit` (change parts of the content by path: `paragraphs.1`, `rows.2.0`), `replaceText` (find and replace across text content), `remove`, `setStyle` (document selector or class), `setRegion`, `removeRegion`, `setTokens`, `setGrid` (a new `unit` converts every position; guides never move anything), `setSurface`, `removeSurface`, `setMeta` (title, locale), `compact` (move components up into empty space; `acrossPages` lets one go back to the previous page) and `fit` (make the document fit `pages` with the strategies you allow — `compact`, `heights`, `spacing`, `type` down to `minScale` — compacting again after each when `compact` is allowed, or change nothing and say why). Positions in `add`/`place` are `{page, x, y, w, h?}`, or relative — `cols: [a, b]` for x/w, `below: "id"` (under where that component is drawn now) or `end: true` (under the lowest box of the page) for page/y — resolved when the op runs and stored as absolute. They usually arrive as JSON, so each one is checked against `OpSchema` first: a malformed op is an `invalid-op` diagnostic naming the field, never an exception.
 
 ### In the browser
 
@@ -88,11 +99,27 @@ Show the page in an iframe (`srcdoc`). It runs no script, so `sandbox="allow-sam
 npx docforge-layout serve --port 8002 --host 127.0.0.1
 ```
 
-`GET /health`, and `POST` with a JSON body: `/validate {doc}`, `/apply {doc, ops}`, `/map {doc, level, components?}`, `/render {doc, grid?}` (every route takes an optional `surface`). It keeps no state and has no auth: run it on a private network next to the service that owns the documents. In Node, `createLayoutServer()` / `createLayoutHandler()` from `@docforge/layout/server` give you the same thing in your own process.
+`GET /health`, and `POST` with a JSON body: `/validate {doc}`, `/apply {doc, ops, pages?, draw?}`, `/map {doc, level, components?, pages?, draw?}`, `/render {doc, grid?}`, `/measure {component, doc?, widths?, cols?}`, `/find {doc, query}`, `/calibrate {doc, target, variants}`, `/diff {before, after, touched?}`, `/locate {doc, anchors}`, `/upgrade {doc}` (every route takes an optional `surface`). It keeps no state and has no auth: run it on a private network next to the service that owns the documents. In Node, `createLayoutServer()` / `createLayoutHandler()` from `@docforge/layout/server` give you the same thing in your own process.
 
-Map levels: **0** outline (sections and components), **1** the grid (bands, columns, alerts per page), **2** one component in full (area, need, content, every style property with its origin, diagnostics).
+### As an MCP server (local files)
 
-Operations: `add`, `place`, `update`, `remove`, `addSection`, `addBand`, `setBand`, `moveBand`, `removeBand`, `setStyle` (document selector or label), `setRegion`, `removeRegion`, `setTokens`. They usually arrive as JSON, so each one is checked against `OpSchema` first: a malformed op is an `invalid-op` diagnostic naming the field (`op 2 (add): invalid fields — at.colSpan: …`), never an exception.
+```sh
+npx docforge-layout mcp --root .
+claude mcp add docforge-layout -- npx docforge-layout mcp --root /path/to/docs
+```
+
+Agents get the same loop as in DocForge, on `*.docforge.json` files under the root: `create_layout_document`, `get_layout_map`, `find_layout`, `measure_component`, `preview_layout`, `apply_layout_ops`, `calibrate_style`, `render_layout` (HTML to print as PDF), `get_layout_document`, `upgrade_layout_document`, and the guide as the resource `docforge-layout://guide`. Paths outside the root are refused; before a file is overwritten, the previous version goes to `.docforge-history/` (the last 20). In Node, `createMcpHandler()` from `@docforge/layout/mcp` answers one JSON-RPC message at a time.
+
+### From a terminal
+
+```sh
+npx docforge-layout map doc.json --pages 1 --level 1
+npx docforge-layout measure component.json --doc doc.json --widths 40,60 --cols 1-6
+npx docforge-layout apply doc.json ops.json            # preview; add --write out.json to save
+npx docforge-layout find doc.json --text receita --page 1
+npx docforge-layout render doc.json --out page.html --grid
+npx docforge-layout upgrade v1.json --write v2.json
+```
 
 ## Develop
 
@@ -110,7 +137,7 @@ The playground has three examples (`examples/`), a JSON editor, the render with 
 
 Unattended checks (for scripts): `?auto=conformance&count=1000`, `?auto=examples` and `?print=<example>&surface=<id>[&grid=1]` (the bare document, for `--print-to-pdf` or a screenshot).
 
-The code is organized by stage: `src/layout/` runs schema → `structure` → `measure` → `bands` → `paginate` → `links`, and `layout/engine.ts` only chains them.
+The code is organized by stage: `src/layout/` runs schema → `structure` → `measure` → `place` (collisions and pages) → `links`, and `layout/engine.ts` only chains them. `src/map/` writes the text maps, `src/query/` holds `find` and `measure`, `layout/changes.ts` diffs two layouts.
 
 ### Measured so far (Chrome, Windows)
 
@@ -118,7 +145,7 @@ The code is organized by stage: `src/layout/` runs schema → `structure` → `m
 | --- | --- |
 | Conformance, 1,000 generated cases, tolerance 1px | 999 cases (99.9%), 8,756 of 8,757 lines, worst line 1.11px |
 | Lines of the three examples, every surface | none overflowing its box; worst line 1.18px |
-| Layout of a ~44-page document (Node) | ~330ms cold, ~70ms warm |
+| Layout of a ~42-page document, every box declared at the top so all 201 are pushed into place (Node) | ~280ms cold, ~65ms warm; level-1 map ~2,300 characters per page |
 | Single string, library vs browser | 253.055px vs 253.063px |
 
 ## Fonts

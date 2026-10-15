@@ -1,22 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { engine, lorem } from "./helpers";
+import { at, doc, engine, lorem } from "./helpers";
 
-/** ~44 A4 pages: 100 bands of text + KPI, and a 300-row table that splits across pages. */
+/**
+ * ~44 A4 pages: 100 rows of text + KPI, and a 300-row table that splits across pages.
+ * Everything is declared at the top of page 1, so the layout pushes every row down
+ * below the previous one: the worst case for collision resolution.
+ */
 function largeDocument() {
-  const bands: unknown[] = [];
   const components: unknown[] = [];
   for (let i = 0; i < 100; i++) {
-    bands.push({ id: `b${i}`, span: "auto", items: [{ component: `t${i}`, colStart: 1, colSpan: 7 }, { component: `k${i}`, colStart: 8, colSpan: 5 }] });
-    components.push({ id: `t${i}`, type: "text", content: { paragraphs: [{ role: "title-2", text: `Seção ${i}` }, `${lorem} ${lorem}`, lorem] } });
-    components.push({ id: `k${i}`, type: "kpi", content: { value: `R$ ${i},2M`, label: "Receita", delta: "+3%" } });
+    components.push({ id: `t${i}`, type: "text", content: { paragraphs: [{ role: "title-2", text: `Seção ${i}` }, `${lorem} ${lorem}`, lorem] }, at: at(0, 0, 50) });
+    components.push({ id: `k${i}`, type: "kpi", content: { value: `R$ ${i},2M`, label: "Receita", delta: "+3%" }, at: at(52, 0, 35) });
   }
-  bands.push({ id: "tab", span: "auto", items: [{ component: "tab", colStart: 1, colSpan: 12 }] });
   components.push({
     id: "tab",
     type: "table",
     content: { columns: ["Região", "Receita", "Variação"], rows: Array.from({ length: 300 }, (_, i) => [`Região ${i}`, `R$ ${i},${i}M`, `${i % 9}%`]) },
+    at: at(0, 0, 87),
   });
-  return { format: "docforge/layout", version: 1, surfaces: [{ id: "a4", kind: "page", size: "A4", margin: 48 }], sections: [{ id: "s", bands }], components };
+  return doc({ components });
 }
 
 describe("performance", () => {

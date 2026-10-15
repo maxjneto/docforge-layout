@@ -1,186 +1,374 @@
 {
   "format": "docforge/layout",
-  "version": 1,
-  "meta": { "title": "Relatório trimestral — T3 2026", "locale": "pt-BR" },
-  "surfaces": [
-    { "id": "a4", "kind": "page", "size": "A4", "margin": 48 },
-    { "id": "continua", "kind": "continuous", "width": 900, "margin": 48 }
-  ],
+  "version": 2,
+  "meta": {
+    "title": "Relatório trimestral — T3 2026",
+    "locale": "pt-BR"
+  },
+  "grid": {
+    "unit": 8,
+    "columns": 12,
+    "gutter": 16,
+    "gap": 2
+  },
   "styles": {
     "document": {
-      "text.title-1": { "color": "$color.primary" }
+      "text.title-1": {
+        "color": "$color.primary"
+      }
     },
     "labels": {
-      "destaque": { "color": "$color.primary", "fontWeight": 600 }
-    },
-    "regions": [
-      { "id": "proximos-compacto", "section": "s-proximos", "style": { "fontSize": "$size.s" } }
-    ]
+      "destaque": {
+        "fontWeight": 600,
+        "color": "$color.primary"
+      },
+      "region-proximos-compacto": {
+        "fontSize": "$size.s"
+      }
+    }
   },
-  "sections": [
+  "surfaces": [
     {
-      "id": "s-capa",
-      "name": "Capa",
-      "bands": [
-        { "id": "r-titulo", "span": "auto", "items": [{ "component": "titulo", "colStart": 1, "colSpan": 12 }] },
-        {
-          "id": "r-kpis",
-          "span": 16,
-          "items": [
-            { "component": "kpi-receita", "colStart": 1, "colSpan": 4 },
-            { "component": "kpi-margem", "colStart": 5, "colSpan": 4 },
-            { "component": "kpi-clientes", "colStart": 9, "colSpan": 4 }
-          ]
-        }
-      ]
+      "id": "a4",
+      "kind": "page",
+      "size": "A4",
+      "margin": 48
     },
     {
-      "id": "s-vendas",
-      "name": "Vendas",
-      "bands": [
-        {
-          "id": "r-vendas",
-          "span": "auto",
-          "items": [
-            { "component": "texto-vendas", "colStart": 1, "colSpan": 7 },
-            { "component": "grafico-vendas", "colStart": 8, "colSpan": 5 }
-          ]
-        },
-        { "id": "r-tabela", "span": "auto", "items": [{ "component": "tabela-regioes", "colStart": 1, "colSpan": 12 }] }
-      ]
-    },
-    {
-      "id": "s-proximos",
-      "name": "Próximos passos",
-      "bands": [
-        {
-          "id": "r-plano",
-          "span": "auto",
-          "items": [
-            { "component": "passos", "colStart": 1, "colSpan": 6 },
-            { "component": "cronograma", "colStart": 7, "colSpan": 6 }
-          ]
-        },
-        { "id": "r-divisor", "span": 3, "items": [{ "component": "divisor", "colStart": 1, "colSpan": 12 }] },
-        { "id": "r-riscos", "span": "auto", "items": [{ "component": "riscos", "colStart": 1, "colSpan": 12 }] },
-        { "id": "r-codigo", "span": "auto", "items": [{ "component": "consulta", "colStart": 1, "colSpan": 12 }] }
-      ]
+      "id": "continua",
+      "kind": "continuous",
+      "width": 900,
+      "margin": 48
     }
   ],
   "components": [
     {
       "id": "titulo",
+      "at": {
+        "page": 1,
+        "x": 0,
+        "y": 0,
+        "w": 87
+      },
       "type": "text",
       "content": {
         "paragraphs": [
-          { "role": "title-1", "text": "Relatório trimestral — T3 2026" },
-          { "role": "subtitle", "text": "Receita, margem e base de clientes do terceiro trimestre, com o plano para o T4." }
+          {
+            "role": "title-1",
+            "text": "Relatório trimestral — T3 2026"
+          },
+          {
+            "role": "subtitle",
+            "text": "Receita, margem e base de clientes do terceiro trimestre, com o plano para o T4."
+          }
         ]
       }
     },
     {
       "id": "kpi-receita",
+      "at": {
+        "page": 1,
+        "x": 0,
+        "y": 12,
+        "w": 28,
+        "h": 16
+      },
       "type": "kpi",
-      "content": { "value": "R$ 4,2M", "label": "Receita no trimestre", "delta": "+12% vs T2", "trend": "up" },
-      "props": { "href": "#tabela-regioes" }
+      "content": {
+        "value": "R$ 4,2M",
+        "label": "Receita no trimestre",
+        "delta": "+12% vs T2",
+        "trend": "up"
+      },
+      "props": {
+        "href": "#tabela-regioes"
+      }
     },
     {
       "id": "kpi-margem",
+      "at": {
+        "page": 1,
+        "x": 30,
+        "y": 12,
+        "w": 27,
+        "h": 16
+      },
       "type": "kpi",
-      "content": { "value": "31,4%", "label": "Margem bruta", "delta": "−1,2 p.p.", "trend": "down" }
+      "content": {
+        "value": "31,4%",
+        "label": "Margem bruta",
+        "delta": "−1,2 p.p.",
+        "trend": "down"
+      }
     },
     {
       "id": "kpi-clientes",
+      "at": {
+        "page": 1,
+        "x": 59,
+        "y": 12,
+        "w": 28,
+        "h": 16
+      },
       "type": "kpi",
-      "content": { "value": "1.284", "label": "Clientes ativos", "delta": "+86 no trimestre", "trend": "up" }
+      "content": {
+        "value": "1.284",
+        "label": "Clientes ativos",
+        "delta": "+86 no trimestre",
+        "trend": "up"
+      }
     },
     {
       "id": "texto-vendas",
+      "at": {
+        "page": 1,
+        "x": 0,
+        "y": 32,
+        "w": 50,
+        "h": 38
+      },
       "type": "text",
       "content": {
         "paragraphs": [
-          { "role": "title-2", "text": "Vendas por mês" },
+          {
+            "role": "title-2",
+            "text": "Vendas por mês"
+          },
           "A receita cresceu **12%** sobre o T2, puxada por contratos anuais na região Sudeste. Setembro foi o melhor mês do ano, com três renovações antecipadas. Detalhe na [tabela por região](#tabela-regioes).",
           "A margem caiu 1,2 ponto percentual por causa do reajuste de infraestrutura em agosto, que ainda não foi repassado aos planos *Business*.",
-          { "role": "quote", "text": "Renovações antecipadas responderam por 40% da receita nova de setembro." },
-          { "role": "caption", "text": "Plano de ação em [Próximos passos](#s-proximos)." }
+          {
+            "role": "quote",
+            "text": "Renovações antecipadas responderam por 40% da receita nova de setembro."
+          },
+          {
+            "role": "caption",
+            "text": "Plano de ação em [Próximos passos](#passos)."
+          }
         ]
       }
     },
     {
       "id": "grafico-vendas",
+      "at": {
+        "page": 1,
+        "x": 52,
+        "y": 32,
+        "w": 35,
+        "h": 38
+      },
       "type": "chart",
       "content": {
         "kind": "bar",
-        "categories": ["Jul", "Ago", "Set"],
+        "categories": [
+          "Jul",
+          "Ago",
+          "Set"
+        ],
         "series": [
-          { "name": "2025", "values": [1.1, 1.2, 1.25] },
-          { "name": "2026", "values": [1.3, 1.35, 1.55] }
+          {
+            "name": "2025",
+            "values": [
+              1.1,
+              1.2,
+              1.25
+            ]
+          },
+          {
+            "name": "2026",
+            "values": [
+              1.3,
+              1.35,
+              1.55
+            ]
+          }
         ]
       },
-      "props": { "unit": "M" }
+      "props": {
+        "unit": "M"
+      }
     },
     {
       "id": "tabela-regioes",
+      "at": {
+        "page": 1,
+        "x": 0,
+        "y": 72,
+        "w": 87
+      },
       "type": "table",
       "content": {
         "columns": [
-          { "header": "Região", "width": 2 },
-          { "header": "Receita", "align": "right" },
-          { "header": "Variação", "align": "right" },
-          { "header": "Clientes", "align": "right" }
+          {
+            "header": "Região",
+            "width": 2
+          },
+          {
+            "header": "Receita",
+            "align": "right"
+          },
+          {
+            "header": "Variação",
+            "align": "right"
+          },
+          {
+            "header": "Clientes",
+            "align": "right"
+          }
         ],
         "rows": [
-          ["Sudeste", "R$ 1,9M", "+18%", "512"],
-          ["Sul", "R$ 0,9M", "+9%", "301"],
-          ["Nordeste", "R$ 0,7M", "+11%", "248"],
-          ["Centro-Oeste", "R$ 0,4M", "+4%", "131"],
-          ["Norte", "R$ 0,3M", "−2%", "92"]
+          [
+            "Sudeste",
+            "R$ 1,9M",
+            "+18%",
+            "512"
+          ],
+          [
+            "Sul",
+            "R$ 0,9M",
+            "+9%",
+            "301"
+          ],
+          [
+            "Nordeste",
+            "R$ 0,7M",
+            "+11%",
+            "248"
+          ],
+          [
+            "Centro-Oeste",
+            "R$ 0,4M",
+            "+4%",
+            "131"
+          ],
+          [
+            "Norte",
+            "R$ 0,3M",
+            "−2%",
+            "92"
+          ]
         ]
       },
-      "props": { "zebra": true }
+      "props": {
+        "zebra": true
+      }
     },
     {
       "id": "passos",
+      "at": {
+        "page": 1,
+        "x": 0,
+        "y": 101,
+        "w": 43,
+        "h": 25
+      },
+      "labels": [
+        "region-proximos-compacto"
+      ],
       "type": "steps",
       "content": {
         "steps": [
-          { "title": "Repassar o reajuste", "text": "Aplicar o novo preço nos planos *Business* a partir de novembro." },
-          { "title": "Antecipar renovações", "text": "Oferecer desconto de 5% para renovação antecipada no Sul e Nordeste." },
-          { "title": "Revisar a margem", "text": "Nova leitura no fechamento de outubro." }
+          {
+            "title": "Repassar o reajuste",
+            "text": "Aplicar o novo preço nos planos *Business* a partir de novembro."
+          },
+          {
+            "title": "Antecipar renovações",
+            "text": "Oferecer desconto de 5% para renovação antecipada no Sul e Nordeste."
+          },
+          {
+            "title": "Revisar a margem",
+            "text": "Nova leitura no fechamento de outubro."
+          }
         ]
       }
     },
     {
       "id": "cronograma",
+      "at": {
+        "page": 1,
+        "x": 45,
+        "y": 101,
+        "w": 42,
+        "h": 25
+      },
+      "labels": [
+        "region-proximos-compacto"
+      ],
       "type": "timeline",
       "content": {
         "events": [
-          { "date": "15 out", "title": "Comunicar o reajuste", "text": "E-mail para clientes *Business*." },
-          { "date": "1 nov", "title": "Novo preço em vigor" },
-          { "date": "30 nov", "title": "Leitura de margem", "text": "Comparar com o T3." }
+          {
+            "date": "15 out",
+            "title": "Comunicar o reajuste",
+            "text": "E-mail para clientes *Business*."
+          },
+          {
+            "date": "1 nov",
+            "title": "Novo preço em vigor"
+          },
+          {
+            "date": "30 nov",
+            "title": "Leitura de margem",
+            "text": "Comparar com o T3."
+          }
         ]
       }
     },
-    { "id": "divisor", "type": "divider" },
+    {
+      "id": "divisor",
+      "at": {
+        "page": 2,
+        "x": 0,
+        "y": 0,
+        "w": 87,
+        "h": 3
+      },
+      "labels": [
+        "region-proximos-compacto"
+      ],
+      "type": "divider"
+    },
     {
       "id": "riscos",
+      "at": {
+        "page": 2,
+        "x": 0,
+        "y": 5,
+        "w": 87
+      },
+      "labels": [
+        "destaque",
+        "region-proximos-compacto"
+      ],
       "type": "list",
-      "labels": ["destaque"],
       "content": {
         "items": [
           "Churn no plano Business após o reajuste.",
-          { "text": "Atraso nas renovações do Sul.", "items": ["Dois contratos grandes vencem em dezembro."] },
+          {
+            "text": "Atraso nas renovações do Sul.",
+            "items": [
+              "Dois contratos grandes vencem em dezembro."
+            ]
+          },
           "Câmbio afetando o custo de infraestrutura."
         ]
       }
     },
     {
       "id": "consulta",
+      "at": {
+        "page": 2,
+        "x": 0,
+        "y": 19,
+        "w": 87
+      },
+      "labels": [
+        "region-proximos-compacto"
+      ],
       "type": "code",
       "content": {
-        "language": "sql",
-        "code": "SELECT regiao, SUM(receita) AS receita\nFROM vendas\nWHERE trimestre = '2026-T3'\nGROUP BY regiao\nORDER BY receita DESC;"
+        "code": "SELECT regiao, SUM(receita) AS receita\nFROM vendas\nWHERE trimestre = '2026-T3'\nGROUP BY regiao\nORDER BY receita DESC;",
+        "language": "sql"
       }
     }
   ]

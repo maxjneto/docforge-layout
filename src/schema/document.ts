@@ -1,27 +1,31 @@
 import { z } from "zod";
 import { ComponentSchema } from "./components";
+import { RectSchema } from "./placement";
 import { StylePropsSchema } from "./style";
 import { TokenOverridesSchema } from "./tokens";
 
 const Id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/, "ids use letters, digits, - and _");
 
+/**
+ * The grid every position is measured in. `unit` is the size of one square cell in px;
+ * `columns` and `gutter` only draw alignment guides (the editor snaps to them and ops
+ * may place by `cols`), they never limit where a component goes.
+ */
 export const GridSchema = z
   .object({
-    /** Number of columns. */
+    /** Size of one grid unit, in px. x, y, w and h are all in units. */
+    unit: z.number().min(2).max(64),
+    /** Number of guide columns across the content area. */
     columns: z.number().int().min(1).max(48),
-    /** Horizontal gap between columns, in px. */
-    columnGap: z.number().nonnegative(),
-    /** Height of one grid row unit, in px. A band of span N is N × rowUnit tall. */
-    rowUnit: z.number().positive(),
-    /** Vertical gap between bands, in px. */
-    bandGap: z.number().nonnegative(),
-    /** Vertical gap between sections, in px. */
-    sectionGap: z.number().nonnegative(),
+    /** Space between guide columns, in px. */
+    gutter: z.number().nonnegative(),
+    /** Units left between two components when one pushes the other (if they had no gap of their own). */
+    gap: z.number().int().min(0).max(16),
   })
   .strict();
 export type Grid = z.infer<typeof GridSchema>;
 
-export const defaultGrid: Grid = { columns: 12, columnGap: 16, rowUnit: 8, bandGap: 16, sectionGap: 32 };
+export const defaultGrid: Grid = { unit: 8, columns: 12, gutter: 16, gap: 2 };
 
 const Margin = z.union([
   z.number().nonnegative(),
@@ -50,6 +54,8 @@ export const SurfaceSchema = z.discriminatedUnion("kind", [
         z.object({ width: z.number().positive(), height: z.number().positive() }).strict(),
       ]),
       margin: Margin,
+      /** Going over is reported, never refused. */
+      maxPages: z.number().int().min(1).optional(),
     })
     .strict(),
   z
@@ -64,42 +70,11 @@ export const SurfaceSchema = z.discriminatedUnion("kind", [
 ]);
 export type Surface = z.infer<typeof SurfaceSchema>;
 
-export const BandItemSchema = z
-  .object({
-    component: Id,
-    /** First column, 1-based. */
-    colStart: z.number().int().min(1),
-    colSpan: z.number().int().min(1),
-  })
-  .strict();
-export type BandItem = z.infer<typeof BandItemSchema>;
-
-export const BandSchema = z
-  .object({
-    id: Id,
-    /** Height in grid row units, or `auto` to fit the tallest component. */
-    span: z.union([z.number().int().min(1), z.literal("auto")]),
-    items: z.array(BandItemSchema),
-  })
-  .strict();
-export type Band = z.infer<typeof BandSchema>;
-
-export const SectionSchema = z
-  .object({
-    id: Id,
-    name: z.string().optional(),
-    bands: z.array(BandSchema),
-  })
-  .strict();
-export type Section = z.infer<typeof SectionSchema>;
-
-/** A style layer bound to grid positions: a section, optionally some of its bands and a column range. */
+/** A style layer bound to an area of the grid: components whose declared top-left corner is inside get it. */
 export const RegionSchema = z
   .object({
     id: Id,
-    section: Id,
-    bands: z.array(Id).optional(),
-    cols: z.tuple([z.number().int().min(1), z.number().int().min(1)]).optional(),
+    ...RectSchema.shape,
     style: StylePropsSchema,
   })
   .strict();
@@ -110,15 +85,19 @@ export const StylesSchema = z
     /** Document layer, keyed by selector: a component type (`text`) or type.variant (`text.title-1`). */
     document: z.record(z.string(), StylePropsSchema).optional(),
     regions: z.array(RegionSchema).optional(),
+    /** Classes: components list them in `labels`. */
     labels: z.record(z.string(), StylePropsSchema).optional(),
   })
   .strict();
 export type Styles = z.infer<typeof StylesSchema>;
 
+export const FORMAT = "docforge/layout";
+export const VERSION = 2;
+
 export const DocumentSchema = z
   .object({
-    format: z.literal("docforge/layout"),
-    version: z.literal(1),
+    format: z.literal(FORMAT),
+    version: z.literal(VERSION, { error: "expected version 2 (convert version 1 documents with upgradeDocument)" }),
     meta: z
       .object({
         title: z.string().optional(),
@@ -127,13 +106,23 @@ export const DocumentSchema = z
       })
       .catchall(z.unknown())
       .optional(),
-    grid: GridSchema.optional(),
+    grid: GridSchema.partial().optional(),
     tokens: TokenOverridesSchema.optional(),
     styles: StylesSchema.optional(),
     surfaces: z.array(SurfaceSchema).min(1),
-    sections: z.array(SectionSchema),
     components: z.array(ComponentSchema),
   })
   .strict();
 
 export type LayoutDocument = z.infer<typeof DocumentSchema>;
+
+/** A document with nothing in it: one A4 surface. */
+export function emptyDocument(title?: string): LayoutDocument {
+  return {
+    format: FORMAT,
+    version: VERSION,
+    ...(title ? { meta: { title } } : {}),
+    surfaces: [{ id: "a4", kind: "page", size: "A4", margin: 40 }],
+    components: [],
+  };
+}

@@ -19,7 +19,7 @@ describe("style cascade", () => {
       {
         ...base,
         document: { text: { color: "$color.muted", fontSize: "$size.s" } },
-        regions: [{ id: "r1", section: "s1", style: { color: "$color.danger" } }],
+        regions: [{ id: "r1", x: 0, y: 0, w: 10, h: 10, style: { color: "$color.danger" } }],
         labelStyles: { forte: { fontWeight: 700, color: "$color.success" } },
         componentLabels: ["forte"],
         componentStyle: { align: "center" },
