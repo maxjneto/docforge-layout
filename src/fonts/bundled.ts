@@ -11,6 +11,15 @@ export const BUNDLED_FONTS = [
   { family: "Inter", weight: 700, style: "italic", file: "Inter-BoldItalic.ttf" },
   { family: "JetBrains Mono", weight: 400, style: "normal", file: "JetBrainsMono-Regular.ttf" },
   { family: "JetBrains Mono", weight: 600, style: "normal", file: "JetBrainsMono-SemiBold.ttf" },
+  // Theme fonts (titles): a serif and a display grotesque, latin subset.
+  { family: "Source Serif 4", weight: 400, style: "normal", file: "SourceSerif4-Regular.ttf" },
+  { family: "Source Serif 4", weight: 600, style: "normal", file: "SourceSerif4-SemiBold.ttf" },
+  { family: "Source Serif 4", weight: 700, style: "normal", file: "SourceSerif4-Bold.ttf" },
+  { family: "Source Serif 4", weight: 400, style: "italic", file: "SourceSerif4-Italic.ttf" },
+  { family: "Space Grotesk", weight: 400, style: "normal", file: "SpaceGrotesk-Regular.ttf" },
+  { family: "Space Grotesk", weight: 500, style: "normal", file: "SpaceGrotesk-Medium.ttf" },
+  { family: "Space Grotesk", weight: 600, style: "normal", file: "SpaceGrotesk-SemiBold.ttf" },
+  { family: "Space Grotesk", weight: 700, style: "normal", file: "SpaceGrotesk-Bold.ttf" },
 ] as const satisfies ReadonlyArray<{ family: string; weight: number; style: "normal" | "italic"; file: string }>;
 
 export type BundledFontFile = (typeof BUNDLED_FONTS)[number]["file"];

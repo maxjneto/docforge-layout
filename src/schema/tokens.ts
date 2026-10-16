@@ -46,6 +46,8 @@ export const defaultTokens: Tokens = {
   },
   font: {
     sans: "Inter",
+    /** Titles, KPI values and card titles: a theme can give them their own family. */
+    heading: "Inter",
     mono: "JetBrains Mono",
   },
   size: {

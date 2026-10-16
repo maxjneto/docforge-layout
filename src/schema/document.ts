@@ -42,7 +42,10 @@ const Margin = z.union([
 export const PAGE_SIZES = {
   A4: { width: (210 * 96) / 25.4, height: (297 * 96) / 25.4 },
   Letter: { width: 8.5 * 96, height: 11 * 96 },
+  /** A 16:9 slide, PowerPoint's default (13.333 × 7.5 in). */
+  Slide: { width: 1280, height: 720 },
 } as const;
+export type PageSizeName = keyof typeof PAGE_SIZES;
 
 export const SurfaceSchema = z.discriminatedUnion("kind", [
   z
@@ -50,7 +53,7 @@ export const SurfaceSchema = z.discriminatedUnion("kind", [
       id: Id,
       kind: z.literal("page"),
       size: z.union([
-        z.enum(["A4", "Letter"]),
+        z.enum(["A4", "Letter", "Slide"]),
         z.object({ width: z.number().positive(), height: z.number().positive() }).strict(),
       ]),
       margin: Margin,
@@ -103,6 +106,8 @@ export const DocumentSchema = z
         title: z.string().optional(),
         /** BCP 47 locale for numbers and dates the library formats (chart axes…). Default en-US. */
         locale: z.string().regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/).optional(),
+        /** Name of the theme the tokens came from (informative: the tokens are what renders). */
+        theme: z.string().max(120).optional(),
       })
       .catchall(z.unknown())
       .optional(),

@@ -129,6 +129,22 @@ export const OP_SCHEMAS = {
     .strict(),
   removeSurface: z.object({ op: z.literal("removeSurface"), surface: Ref }).strict(),
   /**
+   * Work on whole pages (slides), by declared position:
+   * - `insert`: an empty page after `page` (0 = before the first); later pages move down one;
+   * - `duplicate`: a copy of `page` right after it (copied components get new ids, `<id>-2`…);
+   * - `remove`: delete `page` and everything declared on it; later pages move up one;
+   * - `move`: put `page` at position `to`; the pages in between shift by one.
+   * Components keep x, y, w and h; regions bound to a page follow it.
+   */
+  page: z
+    .object({
+      op: z.literal("page"),
+      action: z.enum(["insert", "duplicate", "remove", "move"]),
+      page: Int0,
+      to: Int1.optional(),
+    })
+    .strict(),
+  /**
    * Move components up into the empty space above them. Limit it to some components or
    * one page; `gap` overrides the units kept between boxes; `acrossPages` lets a component
    * at the top of a page move to the end of the previous one when it fits.
@@ -156,7 +172,7 @@ export const OP_SCHEMAS = {
       minScale: z.number().min(0.5).max(1).optional(),
     })
     .strict(),
-  /** Title and locale (BCP 47, for numbers the library formats); `null` removes a field. */
+  /** Title, locale (BCP 47, for numbers the library formats) and the theme's name; `null` removes a field. */
   setMeta: z
     .object({
       op: z.literal("setMeta"),
@@ -164,6 +180,7 @@ export const OP_SCHEMAS = {
         .object({
           title: z.string().max(300).nullable().optional(),
           locale: z.string().regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/).nullable().optional(),
+          theme: z.string().max(120).nullable().optional(),
         })
         .strict(),
     })

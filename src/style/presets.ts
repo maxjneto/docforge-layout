@@ -24,9 +24,9 @@ export const defaultPresets: Record<string, StyleProps> = {
   },
 
   text: { gap: "$space.3" },
-  "text.title-1": { fontSize: "$size.xxl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
-  "text.title-2": { fontSize: "$size.xl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
-  "text.title-3": { fontSize: "$size.l", fontWeight: 600, lineHeight: "$lineHeight.tight" },
+  "text.title-1": { fontFamily: "$font.heading", fontSize: "$size.xxl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
+  "text.title-2": { fontFamily: "$font.heading", fontSize: "$size.xl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
+  "text.title-3": { fontFamily: "$font.heading", fontSize: "$size.l", fontWeight: 600, lineHeight: "$lineHeight.tight" },
   "text.subtitle": { fontSize: "$size.l", color: "$color.muted" },
   "text.quote": { italic: true, color: "$color.muted" },
   "text.caption": { fontSize: "$size.s", color: "$color.muted" },
@@ -52,6 +52,7 @@ export const defaultPresets: Record<string, StyleProps> = {
   "timeline.title": { fontWeight: 600 },
 
   kpi: {
+    fontFamily: "$font.heading",
     fontSize: "$size.display",
     fontWeight: 700,
     lineHeight: "$lineHeight.tight",
@@ -59,8 +60,8 @@ export const defaultPresets: Record<string, StyleProps> = {
     radius: "$radius.m",
     padding: "$space.4",
   },
-  "kpi.label": { fontSize: "$size.s", fontWeight: 400, color: "$color.muted", lineHeight: "$lineHeight.normal" },
-  "kpi.delta": { fontSize: "$size.s", fontWeight: 600, lineHeight: "$lineHeight.normal" },
+  "kpi.label": { fontFamily: "$font.sans", fontSize: "$size.s", fontWeight: 400, color: "$color.muted", lineHeight: "$lineHeight.normal" },
+  "kpi.delta": { fontFamily: "$font.sans", fontSize: "$size.s", fontWeight: 600, lineHeight: "$lineHeight.normal" },
 
   card: {
     background: "$color.surface",
@@ -71,8 +72,8 @@ export const defaultPresets: Record<string, StyleProps> = {
     gap: "$space.2",
   },
   "card.eyebrow": { fontSize: "$size.xs", fontWeight: 600, color: "$color.muted" },
-  "card.title": { fontSize: "$size.l", fontWeight: 600, lineHeight: "$lineHeight.tight" },
-  "card.value": { fontSize: "$size.xxl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
+  "card.title": { fontFamily: "$font.heading", fontSize: "$size.l", fontWeight: 600, lineHeight: "$lineHeight.tight" },
+  "card.value": { fontFamily: "$font.heading", fontSize: "$size.xxl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
   "card.footer": { fontSize: "$size.s", fontWeight: 600, color: "$color.primary" },
 
   chart: { fontSize: "$size.xs", color: "$color.muted" },

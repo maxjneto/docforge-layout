@@ -40,7 +40,8 @@ is 89 units wide and 130 tall; the map's first lines give the exact numbers.
 {"op": "setTokens", "tokens": {"color": {"primary": "#0b6e4f"}}}
 {"op": "setGrid", "grid": {"unit": 8, "columns": 12, "gutter": 16, "gap": 2}}
 {"op": "setSurface", "surface": {"id": "a4", "kind": "page", "size": "A4", "margin": 40, "maxPages": 2}}
-{"op": "setMeta", "meta": {"title": "Q3", "locale": "pt-BR"}}
+{"op": "setMeta", "meta": {"title": "Q3", "locale": "pt-BR", "theme": "Executivo"}}
+{"op": "page", "action": "insert" | "duplicate" | "remove" | "move", "page": 2, "to": 4}
 {"op": "compact", "acrossPages": true}
 {"op": "fit", "pages": 2, "strategies": ["compact", "heights", "spacing", "type"], "minScale": 0.85}
 \`\`\`
@@ -59,6 +60,9 @@ is 89 units wide and 130 tall; the map's first lines give the exact numbers.
   rows, edges just off a guide, a near-empty last page), each with the ops that fix it.
 - Positions: absolute, or \`below: "id"\` / \`end: true\` for y and \`cols\` for x/w; in \`place\`, what you
   leave out stays.
+- Slides: a page surface with \`"size": "Slide"\` (1280 × 720 px, 16:9) is a deck, one slide per page.
+  Put every component on its slide (\`at.page\`) and keep each slide self-contained. \`page\` inserts,
+  duplicates, removes or reorders whole slides (\`insert\` with page 0 adds one before the first).
 - \`compact\` moves components up into empty space (optionally only some, one page, or across pages).
 - \`fit\` makes the document fit a page count with the strategies you allow, mildest first (compact,
   heights — minimum heights down to what content needs —, spacing, type); it changes nothing (and
@@ -74,5 +78,8 @@ text (paragraphs with roles title-1/2/3, subtitle, body, quote, caption; inline 
 
 Cascade: preset → document (by type or type.role) → region → class (labels) → the component.
 Prefer tokens: $color.*, $size.xs…display, $space.0-6, $radius.*, $lineHeight.*.
+Fonts: $font.sans (text), $font.heading (titles, KPI values, card titles), $font.mono. Bundled
+families: Inter, Source Serif 4, Space Grotesk, JetBrains Mono. A theme is a set of tokens
+(\`setTokens\`); \`$color.surface\` is the page color, so a dark theme sets it with light text.
 Use \`calibrate_style\` to compare variants (sizes, lines, what moves) before choosing one.
 `;

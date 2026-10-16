@@ -42,6 +42,8 @@ export function reviewLayout(layout: LayoutResult): ReviewResult {
   if (!doc) return { findings, text: "The document is invalid; nothing to review." };
   const unit = layout.grid.unit;
   const geo = layout.components;
+  // A deck: every slide stands alone, so a short last slide or a title per slide is normal.
+  const slides = layout.surface?.kind === "page" && layout.surface.size === "Slide";
 
   // 1. Boxes much taller than their content (a minimum height set for another reason).
   for (const g of Object.values(geo)) {
@@ -129,7 +131,7 @@ export function reviewLayout(layout: LayoutResult): ReviewResult {
 
   // 4. A last page that is mostly empty.
   const pages = layout.pages;
-  if (pages.length > 1) {
+  if (pages.length > 1 && !slides) {
     const lastIndex = pages.length;
     const lastPage = pages[lastIndex - 1];
     if (lastPage && Number.isFinite(lastPage.rows)) {
@@ -158,7 +160,7 @@ export function reviewLayout(layout: LayoutResult): ReviewResult {
       (((c as { props?: { role?: string } }).props?.role === "title-1") ||
         ((c as { content?: { paragraphs?: unknown[] } }).content?.paragraphs ?? []).some((p) => typeof p === "object" && p !== null && (p as { role?: string }).role === "title-1")),
   );
-  if (titles.length > 1) {
+  if (titles.length > 1 && !slides) {
     findings.push({
       code: "title-count",
       severity: "info",

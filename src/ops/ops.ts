@@ -159,6 +159,73 @@ function placeRow(doc: LayoutDocument, op: RowOp, ctx: OpsContext): string[] | s
   return ids;
 }
 
+type PageOp = Extract<Op, { op: "page" }>;
+
+/** Insert, duplicate, remove or move a page (see the `page` op). Returns the ids it moved or created, or a message. */
+function pageOp(doc: LayoutDocument, op: PageOp, ctx: OpsContext): string[] | string {
+  const declaredPages = doc.components.map((c) => c.at?.page ?? 1);
+  const count = Math.max(ctx.layout(doc).pages.length, 1, ...declaredPages);
+  const { action, page } = op;
+  if (action === "insert" ? page > count : page < 1 || page > count) {
+    return action === "insert" ? `page must be 0–${count} (0 inserts before the first).` : `page must be 1–${count}.`;
+  }
+  const moved: string[] = [];
+  /** Re-number every declared page with `map` (regions bound to a page too). */
+  const renumber = (map: (p: number) => number) => {
+    for (const c of doc.components) {
+      if (!c.at) continue;
+      const next = map(c.at.page);
+      if (next !== c.at.page) {
+        c.at = { ...c.at, page: next };
+        moved.push(c.id);
+      }
+    }
+    for (const r of doc.styles?.regions ?? []) if (r.page !== undefined) r.page = map(r.page);
+  };
+  switch (action) {
+    case "insert":
+      renumber((p) => (p > page ? p + 1 : p));
+      return moved;
+    case "remove": {
+      const gone = new Set(doc.components.filter((c) => (c.at?.page ?? 1) === page).map((c) => c.id));
+      doc.components = doc.components.filter((c) => !gone.has(c.id));
+      if (doc.styles?.regions) doc.styles.regions = doc.styles.regions.filter((r) => r.page !== page);
+      renumber((p) => (p > page ? p - 1 : p));
+      return moved;
+    }
+    case "move": {
+      const to = op.to;
+      if (to === undefined || to > count) return `give to: 1–${count}.`;
+      if (to === page) return [];
+      renumber((p) => {
+        if (p === page) return to;
+        if (page < to && p > page && p <= to) return p - 1;
+        if (to < page && p >= to && p < page) return p + 1;
+        return p;
+      });
+      return moved;
+    }
+    case "duplicate": {
+      const source = doc.components.filter((c) => (c.at?.page ?? 1) === page);
+      renumber((p) => (p > page ? p + 1 : p));
+      const taken = new Set(doc.components.map((c) => c.id));
+      const fresh = (id: string) => {
+        const base = id.replace(/-\d+$/, "");
+        let n = 2;
+        while (taken.has(`${base}-${n}`)) n++;
+        taken.add(`${base}-${n}`);
+        return `${base}-${n}`;
+      };
+      const copies = source.map((c) => ({ ...structuredClone(c), id: fresh(c.id), at: { ...(c.at as Placement), page: page + 1 } }) as Component);
+      doc.components.push(...copies);
+      for (const r of [...(doc.styles?.regions ?? [])]) {
+        if (r.page === page) doc.styles!.regions!.push({ ...structuredClone(r), id: fresh(r.id), page: page + 1 });
+      }
+      return [...moved, ...copies.map((c) => c.id)];
+    }
+  }
+}
+
 /** Convert every position to a new unit size, keeping sizes in px. */
 function rescale(doc: LayoutDocument, from: number, to: number): void {
   const f = from / to;
@@ -410,6 +477,12 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         }
         if (Object.keys(meta).length) doc.meta = meta as LayoutDocument["meta"];
         else delete doc.meta;
+        break;
+      }
+      case "page": {
+        const result = pageOp(doc, op, ctx);
+        if (typeof result === "string") errors.push(opError(result));
+        else touched.push(...result);
         break;
       }
       case "removeSurface": {

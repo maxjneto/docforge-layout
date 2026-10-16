@@ -1,6 +1,6 @@
 {
   "name": "@docforge/layout",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "DocForge document format: components placed on a unit grid, measured without a browser, rendered to HTML and print-ready pages.",
   "license": "MIT",
   "type": "module",
