@@ -1,4 +1,4 @@
-# @docforge/layout
+# @docforge-lib/layout
 
 The DocForge document format: components placed on a grid, **measured without a browser**, rendered to HTML whose pages print to PDF exactly as they look on screen.
 
@@ -6,7 +6,7 @@ An agent never has to look at the page. It reads a text map of the document, ask
 
 ## How it works
 
-- **The document is JSON** (`version: 2`). Every component has a position `at: { page, x, y, w, h? }` in **grid units**: square cells of `grid.unit` px (8 by default), counted from the top-left corner of the page's content area. The page size only decides how many units fit (A4 with 40px margins: 89 × 130). `grid.columns` and `grid.gutter` draw **guides** — the editor snaps to them and ops may place by `cols: [1, 7]` — but never limit where a component goes.
+- **The document is JSON** (`version: 3`). Every component has a position `at: { page, x, y, w, h? }` in **grid units**: square cells of `grid.unit` px (8 by default), counted from the top-left corner of the page's content area. The page size only decides how many units fit (A4 with 40px margins: 89 × 130). `grid.columns` and `grid.gutter` draw **guides** — the editor snaps to them and ops may place by `cols: [1, 7]` — but never limit where a component goes.
 - **Content decides the height.** `h` is a minimum: a component whose content needs more grows. Whatever a growing (or overlapping) box **invades** moves down below it, `grid.gap` units apart, in a chain; nothing else moves. Pushes are computed, never stored, so a box returns to its place when what pushed it shrinks.
 - **The library paginates.** A box that crosses the bottom of a page splits between lines/rows when it can (text, list, table, code, steps, timeline — tables repeat their header) or moves whole to the next page; either way it pushes what it meets there. `maxPages` on a surface is reported when exceeded, never refused.
 - **The library measures text itself.** It reads the same font files the browser renders with (fontkit), decides every line break, and draws each line ready-made (`white-space: pre`). The browser never re-wraps, so a height computed here is the height on screen and in print.
@@ -49,11 +49,19 @@ Each component also renders a visually hidden **semantic layer** — real `h1`�
 
 Numbers the library formats (chart axes and values) follow `meta.locale` (BCP 47, default `en-US`): `"pt-BR"` gives `0,5M`.
 
+## Install
+
+```sh
+npm install @docforge-lib/layout
+```
+
+Node 20+ or any modern browser. Pin the version you tested with (`~0.5.0`): before 1.0, a minor version may change the API.
+
 ## Use
 
 ```ts
-import { createEngine } from "@docforge/layout";
-import { createNodeRegistry } from "@docforge/layout/node";
+import { createEngine } from "@docforge-lib/layout";
+import { createNodeRegistry } from "@docforge-lib/layout/node";
 
 const engine = createEngine({ registry: createNodeRegistry() });
 
@@ -79,13 +87,46 @@ Map levels: **0** outline (components per page), **1** settings + each page draw
 
 Operations: `add`, `place`, `update`, `edit` (change parts of the content by path: `paragraphs.1`, `rows.2.0`), `replaceText` (find and replace across text content), `remove`, `setStyle` (document selector or class), `setRegion`, `removeRegion`, `setTokens`, `setGrid` (a new `unit` converts every position; guides never move anything), `setSurface`, `removeSurface`, `setMeta` (title, locale), `compact` (move components up into empty space; `acrossPages` lets one go back to the previous page) and `fit` (make the document fit `pages` with the strategies you allow — `compact`, `heights`, `spacing`, `type` down to `minScale` — compacting again after each when `compact` is allowed, or change nothing and say why). Positions in `add`/`place` are `{page, x, y, w, h?}`, or relative — `cols: [a, b]` for x/w, `below: "id"` (under where that component is drawn now) or `end: true` (under the lowest box of the page) for page/y — resolved when the op runs and stored as absolute. They usually arrive as JSON, so each one is checked against `OpSchema` first: a malformed op is an `invalid-op` diagnostic naming the field, never an exception.
 
+### Documents from DocForge
+
+The JSON is the document: fonts ship with the library and images are links or `data:` URLs, so a stored copy renders with no call to DocForge. Three ways in:
+
+```ts
+import { fetchPublished, createClient, readDocument } from "@docforge-lib/layout";
+
+// 1. JSON you already have (your database, a file): rendered as it is.
+const { doc } = readDocument(json); // older formats are converted up (with a warning in the log)
+
+// 2. The published version, by its public link or token. Browser or server.
+const published = await fetchPublished("https://docforge.dev/public/<token>");
+
+// 3. By id with an API key: server only (createClient refuses to run in a browser).
+const docforge = createClient({ apiKey: process.env.DOCFORGE_API_KEY! });
+await docforge.get(id, { revision: 42 }); // exactly that revision, cached for good once read
+await docforge.get(id);                    // the current one; the log says it was not pinned
+```
+
+A link only ever serves what its owner **published**: later edits stay private until they publish again, and unpublishing revokes the link (`not_found`).
+
+**Do not make your readers depend on DocForge.** The recommended pattern is to fetch when the document is published (or when someone presses "update" in your admin), store `doc` in your own database, and render from there. If you read live instead, the default cache (in memory; pass your own `cache` with `get`/`set` for localStorage or a database) serves the last good copy when the server fails, and logs `served_from_cache`. A document that was unpublished is never served from the cache.
+
+### Format versions
+
+Documents carry a format `version` (now 3). It goes up whenever the schema accepts something an older library would refuse, and each release that raises it adds the conversion one step down.
+
+- **Older document, newer library:** read as it is (2 → 3 changed only the number) or converted (`upgradeDocument` for version 1), with a `format_upgraded` warning.
+- **Newer document, older library:** refused with `format_unsupported`, naming the version to update to. When you load from DocForge this does not happen: every request says which format this library reads (`?format=3`), the server converts down with `downgradeDocument` and lists what the older format cannot say (a 16:9 slide written as a 1280×720 page, a theme font older libraries do not bundle), and the library logs it as `format_downgraded`.
+- `downgradeDocument(doc, 2)` is public too, if you serve documents to older libraries yourself.
+
+Warnings go to `console.warn` with a stable `code`: `format_upgraded`, `format_downgraded`, `format_unsupported`, `revision_unpinned`, `served_from_cache`. Pass `logger: (entry) => …` to route them into your logs, or `silentLogger`.
+
 ### In the browser
 
 Fonts are files, so the browser has to fetch them. `createBrowserRegistry(location)` fetches every bundled font and registers it; the rendered page's `@font-face` rules point at the same URLs, so what was measured is what is drawn. `location` is a folder URL that serves the files under their own names, a map from file name to URL, or a function. Bundlers rename assets, so with one use the map:
 
 ```ts
-import { createBrowserRegistry, createEngine } from "@docforge/layout";
-import interRegular from "@docforge/layout/fonts/Inter-Regular.ttf?url"; // Vite; one import per file in BUNDLED_FONTS
+import { createBrowserRegistry, createEngine } from "@docforge-lib/layout";
+import interRegular from "@docforge-lib/layout/fonts/Inter-Regular.ttf?url"; // Vite; one import per file in BUNDLED_FONTS
 // …
 const registry = await createBrowserRegistry({ "Inter-Regular.ttf": interRegular, /* … */ });
 const engine = createEngine({ registry });
@@ -99,7 +140,7 @@ Show the page in an iframe (`srcdoc`). It runs no script, so `sandbox="allow-sam
 npx docforge-layout serve --port 8002 --host 127.0.0.1
 ```
 
-`GET /health`, and `POST` with a JSON body: `/validate {doc}`, `/apply {doc, ops, pages?, draw?}`, `/map {doc, level, components?, pages?, draw?}`, `/render {doc, grid?}`, `/measure {component, doc?, widths?, cols?}`, `/find {doc, query}`, `/calibrate {doc, target, variants}`, `/diff {before, after, touched?}`, `/locate {doc, anchors}`, `/upgrade {doc}` (every route takes an optional `surface`). It keeps no state and has no auth: run it on a private network next to the service that owns the documents. In Node, `createLayoutServer()` / `createLayoutHandler()` from `@docforge/layout/server` give you the same thing in your own process.
+`GET /health`, and `POST` with a JSON body: `/validate {doc}`, `/apply {doc, ops, pages?, draw?}`, `/map {doc, level, components?, pages?, draw?}`, `/render {doc, grid?}`, `/measure {component, doc?, widths?, cols?}`, `/find {doc, query}`, `/calibrate {doc, target, variants}`, `/diff {before, after, touched?}`, `/locate {doc, anchors}`, `/upgrade {doc}`, `/downgrade {doc, target}` (every route takes an optional `surface`). It keeps no state and has no auth: run it on a private network next to the service that owns the documents. In Node, `createLayoutServer()` / `createLayoutHandler()` from `@docforge-lib/layout/server` give you the same thing in your own process.
 
 ### As an MCP server (local files)
 
@@ -108,7 +149,7 @@ npx docforge-layout mcp --root .
 claude mcp add docforge-layout -- npx docforge-layout mcp --root /path/to/docs
 ```
 
-Agents get the same loop as in DocForge, on `*.docforge.json` files under the root: `create_layout_document`, `get_layout_map`, `find_layout`, `measure_component`, `preview_layout`, `apply_layout_ops`, `calibrate_style`, `render_layout` (HTML to print as PDF), `get_layout_document`, `upgrade_layout_document`, and the guide as the resource `docforge-layout://guide`. Paths outside the root are refused; before a file is overwritten, the previous version goes to `.docforge-history/` (the last 20). In Node, `createMcpHandler()` from `@docforge/layout/mcp` answers one JSON-RPC message at a time.
+Agents get the same loop as in DocForge, on `*.docforge.json` files under the root: `create_layout_document`, `get_layout_map`, `find_layout`, `measure_component`, `preview_layout`, `apply_layout_ops`, `calibrate_style`, `render_layout` (HTML to print as PDF), `get_layout_document`, `upgrade_layout_document`, and the guide as the resource `docforge-layout://guide`. Paths outside the root are refused; before a file is overwritten, the previous version goes to `.docforge-history/` (the last 20). In Node, `createMcpHandler()` from `@docforge-lib/layout/mcp` answers one JSON-RPC message at a time.
 
 ### From a terminal
 

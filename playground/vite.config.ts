@@ -9,7 +9,7 @@ export default defineConfig({
   root,
   plugins: [react()],
   resolve: {
-    alias: { "@docforge/layout": fileURLToPath(new URL("../src/index.ts", import.meta.url)) },
+    alias: { "@docforge-lib/layout": fileURLToPath(new URL("../src/index.ts", import.meta.url)) },
   },
   server: { port: 5310, fs: { allow: [repo] } },
 });

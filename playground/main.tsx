@@ -1,4 +1,4 @@
-import { createEngine } from "@docforge/layout";
+import { createEngine } from "@docforge-lib/layout";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import onePager from "../examples/one-pager.json";

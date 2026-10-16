@@ -16,7 +16,7 @@ export const at = (x: number, y: number, w: number, h?: number, page = 1) => ({ 
 export function doc(parts: { components: unknown[]; styles?: unknown; surfaces?: unknown[]; grid?: unknown }) {
   return {
     format: "docforge/layout",
-    version: 2,
+    version: 3,
     surfaces: parts.surfaces ?? [{ id: "a4", kind: "page", size: "A4", margin: 48 }],
     ...(parts.grid ? { grid: parts.grid } : {}),
     ...(parts.styles ? { styles: parts.styles } : {}),

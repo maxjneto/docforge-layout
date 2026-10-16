@@ -13,7 +13,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "paths": { "@docforge/layout": ["../src/index.ts"] }
+    "paths": { "@docforge-lib/layout": ["../src/index.ts"] }
   },
   "include": [".", "../src"],
   "exclude": ["vite.config.ts"]

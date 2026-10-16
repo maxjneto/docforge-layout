@@ -95,12 +95,32 @@ export const StylesSchema = z
 export type Styles = z.infer<typeof StylesSchema>;
 
 export const FORMAT = "docforge/layout";
-export const VERSION = 2;
+/**
+ * The format version this library writes. It goes up whenever the schema accepts
+ * something an older library would refuse (3: the `Slide` page size). See `format.ts`.
+ */
+export const VERSION = 3;
+/**
+ * Versions read as they are: every change from them to `VERSION` is only the number
+ * (2 → 3 added options, removed nothing). Version 1 needs `upgradeDocument`.
+ */
+export const SAME_SHAPE_VERSIONS = [2, 3] as const;
+
+function versionError(input: unknown): string {
+  if (typeof input === "number" && Number.isInteger(input) && input > VERSION) {
+    return `this document is format version ${input}; this library reads up to ${VERSION}: update @docforge-lib/layout (or ask the server for format ${VERSION})`;
+  }
+  if (input === 1) return "version 1 document: convert it with upgradeDocument";
+  return `expected format version ${VERSION}`;
+}
 
 export const DocumentSchema = z
   .object({
     format: z.literal(FORMAT),
-    version: z.literal(VERSION, { error: "expected version 2 (convert version 1 documents with upgradeDocument)" }),
+    // Older versions with the same shape are accepted and come out as the current one.
+    version: z
+      .union(SAME_SHAPE_VERSIONS.map((v) => z.literal(v)), { error: (issue) => versionError(issue.input) })
+      .transform((): typeof VERSION => VERSION),
     meta: z
       .object({
         title: z.string().optional(),

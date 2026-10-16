@@ -1,8 +1,19 @@
 {
-  "name": "@docforge/layout",
-  "version": "0.4.0",
+  "name": "@docforge-lib/layout",
+  "version": "0.5.0",
   "description": "DocForge document format: components placed on a unit grid, measured without a browser, rendered to HTML and print-ready pages.",
   "license": "MIT",
+  "author": "Max Aragão",
+  "homepage": "https://docforge.dev",
+  "keywords": [
+    "docforge",
+    "layout",
+    "document",
+    "pdf",
+    "slides",
+    "mcp",
+    "agents"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -26,11 +37,17 @@
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     }
   },
   "files": [
     "dist",
-    "fonts"
+    "fonts",
+    "README.md",
+    "LICENSE"
   ],
   "sideEffects": false,
   "scripts": {
@@ -40,7 +57,8 @@
     "test:watch": "vitest",
     "playground": "vite --config playground/vite.config.ts",
     "lint": "eslint .",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "prepublishOnly": "npm run check"
   },
   "dependencies": {
     "fontkit": "2.0.4",
@@ -64,5 +82,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

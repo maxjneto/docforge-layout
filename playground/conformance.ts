@@ -6,7 +6,7 @@ import {
   type FontRegistry,
   type Run,
   type TextBlock,
-} from "@docforge/layout";
+} from "@docforge-lib/layout";
 import { fontsReady } from "./fonts";
 import { checkLines } from "./measure";
 

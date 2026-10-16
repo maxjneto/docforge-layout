@@ -54,7 +54,7 @@ const TOOLS = [
   {
     name: "create_layout_document",
     description: "Create a layout document file. Without content it starts empty (one A4 page). Read docforge-layout://guide first.",
-    inputSchema: obj({ path: PATH, title: { type: "string" }, content: { type: "object", description: "A full version 2 layout document." } }, ["path"]),
+    inputSchema: obj({ path: PATH, title: { type: "string" }, content: { type: "object", description: "A full layout document (current format version)." } }, ["path"]),
   },
   {
     name: "get_layout_map",
@@ -133,7 +133,7 @@ const TOOLS = [
   },
   {
     name: "upgrade_layout_document",
-    description: "Convert a version 1 document (sections and bands) to version 2 in place.",
+    description: "Convert an older document (version 1: sections and bands; version 2) to the current format in place.",
     inputSchema: obj({ path: PATH }, ["path"]),
   },
 ];
@@ -265,7 +265,7 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
       const result = upgradeDocument(read(args.path), engine);
       if (!result.ok || !result.doc) throw new ToolError(`Could not upgrade: ${result.notes.join("; ")}`);
       write(full, result.doc);
-      return [`Upgraded ${String(args.path)} to version 2.`, ...result.notes.map((n) => `· ${n}`)].join("\n");
+      return [`Upgraded ${String(args.path)} to the current format.`, ...result.notes.map((n) => `· ${n}`)].join("\n");
     },
   };
 

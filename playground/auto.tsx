@@ -1,4 +1,4 @@
-import { createEngine } from "@docforge/layout";
+import { createEngine } from "@docforge-lib/layout";
 import { useEffect, useRef, useState } from "react";
 import onePager from "../examples/one-pager.json";
 import proposta from "../examples/proposta.json";

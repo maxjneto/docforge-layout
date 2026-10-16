@@ -1,4 +1,4 @@
-import { createEngine, type Diagnostic, type Engine, type MapLevel } from "@docforge/layout";
+import { createEngine, type Diagnostic, type Engine, type MapLevel } from "@docforge-lib/layout";
 import { useEffect, useMemo, useRef, useState } from "react";
 import onePager from "../examples/one-pager.json";
 import proposta from "../examples/proposta.json";

@@ -18,6 +18,7 @@
  *   POST /review    { doc, surface? }                                 -> { findings, text }
  *   POST /render-image { doc, page?, scale?, highlight?, surface? }   -> { page, pages, png (base64) | null, svg?, width?, height? }
  *   POST /upgrade   { doc }                                           -> { ok, doc, notes }
+ *   POST /downgrade { doc, target }                                   -> { ok, doc, from, to, notes }
  *
  * `ok` is false only when the document cannot be used (invalid schema, duplicate ids,
  * a malformed op): layout problems are diagnostics, never a refusal.
@@ -38,6 +39,7 @@ import type { Anchor } from "./query/locate";
 import { BLOCKING_CODES, type Diagnostic } from "./validate/diagnostics";
 import type { FindQuery } from "./query/find";
 import { upgradeDocument } from "./upgrade";
+import { downgradeDocument } from "./format";
 
 export interface LayoutServerOptions {
   /** Defaults to an engine over the bundled fonts. */
@@ -247,6 +249,10 @@ export function createLayoutHandler(options: LayoutServerOptions = {}): (req: In
     },
 
     "POST /upgrade": (body) => upgradeDocument(docOf(body), engine),
+    "POST /downgrade": (body) => {
+      if (!Number.isInteger(body.target)) throw new HttpError(400, "`target` must be a format version (2, 3…).");
+      return downgradeDocument(docOf(body), body.target as number);
+    },
   };
 
   return async function handle(req, res) {

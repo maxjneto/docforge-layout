@@ -28,7 +28,7 @@ export type BundledFontFile = (typeof BUNDLED_FONTS)[number]["file"];
  * Where the browser can fetch each bundled font:
  * - a folder URL that serves the package's `fonts/` files under their own names;
  * - a map from file name to URL — what a bundler gives you, since it renames assets
- *   (Vite: `import inter from "@docforge/layout/fonts/Inter-Regular.ttf?url"`);
+ *   (Vite: `import inter from "@docforge-lib/layout/fonts/Inter-Regular.ttf?url"`);
  * - a function from file name to URL.
  */
 export type FontLocation = string | Readonly<Record<BundledFontFile, string>> | ((file: BundledFontFile) => string);

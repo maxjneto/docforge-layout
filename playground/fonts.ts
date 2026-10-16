@@ -1,4 +1,4 @@
-import { BUNDLED_FONTS, createBrowserRegistry, type FontRegistry } from "@docforge/layout";
+import { BUNDLED_FONTS, createBrowserRegistry, type FontRegistry } from "@docforge-lib/layout";
 
 // Vite serves the repo's font files under hashed names; the registry measures with the
 // same bytes the iframe renders with.

@@ -1,7 +1,7 @@
 import type { LayoutResult } from "./layout/types";
 import { defOf } from "./components";
 import type { Component } from "./schema/components";
-import { DocumentSchema, FORMAT, VERSION, type LayoutDocument, type Surface } from "./schema/document";
+import { DocumentSchema, FORMAT, SAME_SHAPE_VERSIONS, VERSION, type LayoutDocument, type Surface } from "./schema/document";
 import type { StyleProps } from "./schema/style";
 import type { TokenOverrides } from "./schema/tokens";
 
@@ -47,22 +47,24 @@ function rewriteLinks(value: unknown, targets: Map<string, string>, count: { n: 
 }
 
 /**
- * Convert a version 1 document (sections → bands → items) to version 2 (free
- * positions in units). Bands are laid down top to bottom as version 1 did, measuring
+ * Convert a version 1 document (sections → bands → items) to the current version
+ * (free positions in units). Bands are laid down top to bottom as version 1 did, measuring
  * each one with the engine, so the converted document looks the same:
  * - the grid unit is the old row unit, the guides are the old columns;
  * - a band with several components, a fixed span, or an area component gives them
  *   all its height as `h`, so rows of cards and KPIs stay even;
  * - regions become classes (`region-<id>`) on the components they covered;
  * - links to a section (`#section-id`) now point at its first component.
- * Version 2 documents come back unchanged.
+ * Version 2 documents only get the current number (see SAME_SHAPE_VERSIONS); current
+ * ones come back unchanged.
  */
 export function upgradeDocument(input: unknown, engine: { layout(doc: unknown): LayoutResult }): UpgradeResult {
   const notes: string[] = [];
   const v = (input as { version?: unknown } | null)?.version;
-  if (v === VERSION) {
+  if ((SAME_SHAPE_VERSIONS as readonly unknown[]).includes(v)) {
     const parsed = DocumentSchema.safeParse(input);
-    return { ok: parsed.success, doc: parsed.success ? parsed.data : null, notes: parsed.success ? [] : ["not a valid version 2 document"] };
+    if (!parsed.success) return { ok: false, doc: null, notes: [`not a valid version ${String(v)} document`] };
+    return { ok: true, doc: parsed.data, notes: v === VERSION ? [] : [`version ${String(v)} → ${VERSION}: only the number changed`] };
   }
   if (v !== 1 || !input || typeof input !== "object") return { ok: false, doc: null, notes: ["not a version 1 layout document"] };
   const v1 = input as V1Document;

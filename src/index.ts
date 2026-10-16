@@ -29,6 +29,22 @@ export { measureComponent, type MeasureOptions, type Measurement, type MeasureRe
 export { applyOps, splitColumns, type Op, type AtInput, type OpsResult, type OpsContext } from "./ops/ops";
 export { OpSchema, OP_SCHEMAS, OP_NAMES, AtSchema, parseOp, type OpName } from "./ops/schema";
 export { upgradeDocument, type UpgradeResult } from "./upgrade";
+export { readDocument, downgradeDocument, formatOf, READABLE_FORMATS, OLDEST_DOWNGRADE, type ReadResult, type DowngradeResult } from "./format";
+export { consoleLogger, silentLogger, type Logger, type LogEntry, type LogCode } from "./log";
+export {
+  fetchPublished,
+  createClient,
+  memoryCache,
+  parsePublicSource,
+  DocForgeError,
+  DEFAULT_BASE_URL,
+  type DocForgeClient,
+  type DocumentCache,
+  type CachedDocument,
+  type DocumentPayload,
+  type LoadedDocument,
+  type DocForgeErrorCode,
+} from "./client";
 
 export {
   DocumentSchema,
