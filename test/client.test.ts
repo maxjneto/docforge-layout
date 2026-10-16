@@ -30,6 +30,8 @@ describe("parsePublicSource", () => {
     expect(parsePublicSource("https://docforge.dev/public/abc123")).toEqual({ baseUrl: "https://docforge.dev/api", token: "abc123" });
     expect(parsePublicSource("https://x.dev/api/public/abc123/layout")).toEqual({ baseUrl: "https://x.dev/api", token: "abc123" });
     expect(parsePublicSource("abc123", "http://localhost:8000/api/")).toEqual({ baseUrl: "http://localhost:8000/api", token: "abc123" });
+    // An explicit address wins over the link's (frontend and API on different hosts).
+    expect(parsePublicSource("http://localhost:5173/public/abc123", "http://localhost:8000/api")).toEqual({ baseUrl: "http://localhost:8000/api", token: "abc123" });
   });
 
   it("refuses something that is neither", () => {

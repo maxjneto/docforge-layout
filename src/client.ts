@@ -73,7 +73,10 @@ export class DocForgeError extends Error {
 }
 
 interface LoadOptions {
-  /** The API's address, e.g. `https://docforge.dev/api`. A link carries its own. */
+  /**
+   * The API's address, e.g. `https://docforge.dev/api`. A link carries its own (its
+   * origin + `/api`); set this only when the API lives somewhere else.
+   */
   baseUrl?: string;
   fetch?: typeof fetch;
   /** Default: one in-memory cache shared by the process (or page). `false` turns it off. */
@@ -88,11 +91,14 @@ function trimSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-/** `https://host/public/<token>` (the page) or `https://host/api/public/<token>/layout` (the API), or a bare token. */
-export function parsePublicSource(source: string, baseUrl = DEFAULT_BASE_URL): { baseUrl: string; token: string } {
+/**
+ * `https://host/public/<token>` (the page) or `https://host/api/public/<token>/layout` (the
+ * API), or a bare token. A given `baseUrl` wins over the one a link implies.
+ */
+export function parsePublicSource(source: string, baseUrl?: string): { baseUrl: string; token: string } {
   if (!/^https?:\/\//i.test(source)) {
     if (!source || /[/?#\s]/.test(source)) throw new DocForgeError("not_found", `"${source}" is neither a DocForge link nor a token.`);
-    return { baseUrl: trimSlash(baseUrl), token: source };
+    return { baseUrl: trimSlash(baseUrl ?? DEFAULT_BASE_URL), token: source };
   }
   const url = new URL(source);
   const parts = url.pathname.split("/").filter(Boolean);
@@ -101,7 +107,7 @@ export function parsePublicSource(source: string, baseUrl = DEFAULT_BASE_URL): {
   if (!token) throw new DocForgeError("not_found", `${source} is not a DocForge public link (…/public/TOKEN).`);
   const prefix = parts.slice(0, at);
   const api = prefix.length ? `/${prefix.join("/")}` : "/api";
-  return { baseUrl: `${url.origin}${api}`, token: decodeURIComponent(token) };
+  return { baseUrl: baseUrl ? trimSlash(baseUrl) : `${url.origin}${api}`, token: decodeURIComponent(token) };
 }
 
 async function load(
