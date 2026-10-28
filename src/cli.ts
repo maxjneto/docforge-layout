@@ -75,13 +75,14 @@ async function serve(args: string[]): Promise<void> {
 function main(argv: string[]): void {
   const [command, ...args] = argv;
   if (command === "serve") return void serve(args);
-  if (command === "mcp") return runStdio({ engine: createEngine({ registry: createNodeRegistry() }), root: flag(args, "root") ?? process.cwd() });
+  // Local tools write HTML that is opened on this machine: fonts load from their files.
+  if (command === "mcp") return runStdio({ engine: createEngine({ registry: createNodeRegistry({ fileUrls: true }) }), root: flag(args, "root") ?? process.cwd() });
   if (!command || command === "--help" || command === "-h") {
     console.log(USAGE);
     process.exit(command ? 0 : 1);
   }
 
-  const engine = createEngine({ registry: createNodeRegistry() });
+  const engine = createEngine({ registry: createNodeRegistry({ fileUrls: true }) });
   const surfaceId = flag(args, "surface");
   const json = args.includes("--json");
   const print = (value: unknown, text: string) => console.log(json ? JSON.stringify(value, null, 2) : text);

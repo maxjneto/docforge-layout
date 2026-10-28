@@ -20,6 +20,7 @@ import type { FindQuery } from "../query/find";
 import type { CalibrateTarget } from "../query/calibrate";
 import { emptyDocument } from "../schema/document";
 import { upgradeDocument } from "../upgrade";
+import { LIB_VERSION } from "../version";
 import { AGENT_GUIDE } from "./guide";
 
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -52,8 +53,14 @@ const PAGES = { type: "array", items: { type: "integer", minimum: 1 }, descripti
 
 const TOOLS = [
   {
+    name: "get_layout_guide",
+    description: "How layout documents work: positions, operations, every component's content, and how to build a page in few calls. The same text as the resource docforge-layout://guide.",
+    inputSchema: obj({}),
+  },
+  {
     name: "create_layout_document",
-    description: "Create a layout document file. Without content it starts empty (one A4 page). Read docforge-layout://guide first.",
+    description:
+      "Create a layout document file. Without content it starts empty (one A4 page). First time? Read the guide (get_layout_guide): it shows every component's content and how to build a page in one apply_layout_ops.",
     inputSchema: obj({ path: PATH, title: { type: "string" }, content: { type: "object", description: "A full layout document (current format version)." } }, ["path"]),
   },
   {
@@ -74,21 +81,28 @@ const TOOLS = [
     inputSchema: obj({ path: PATH, ops: OPS, map: MAP_MODE, pages: PAGES }, ["path", "ops"]),
   },
   {
+    name: "undo_layout_change",
+    description:
+      "Take back the last change to a layout document file (or the last `steps` changes) from its .docforge-history/. Undoing again goes one more step back; the version you replace is kept in the history as well. Use it instead of deleting and recreating a file.",
+    inputSchema: obj({ path: PATH, steps: { type: "integer", minimum: 1, description: "How many changes to take back (default 1)." } }, ["path"]),
+  },
+  {
     name: "preview_layout",
     description: "What ops would do to a file, or a whole draft document (content), without saving anything. With ops, answers with a short summary unless map is pages or full.",
     inputSchema: obj({ path: PATH, content: { type: "object" }, ops: OPS, map: MAP_MODE, pages: PAGES }),
   },
   {
     name: "measure_component",
-    description: "How tall a component would be at given widths, without placing it. With path, measured with that document's styles.",
+    description:
+      "How tall components would be at given widths, without placing them. Writes already report every size, so use this only to choose between widths, with all candidates in one call (components). With path, measured with that document's styles.",
     inputSchema: obj(
       {
         component: { type: "object", description: "{id, type, content, props?, style?, labels?}" },
+        components: { type: "array", items: { type: "object" }, description: "Several components measured in one call (instead of component)." },
         widths: { type: "array", items: { type: "integer", minimum: 1 } },
         cols: { type: "array", items: { type: "array", items: { type: "integer", minimum: 1 }, minItems: 2, maxItems: 2 } },
         path: PATH,
       },
-      ["component"],
     ),
   },
   {
@@ -165,11 +179,16 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
       throw new ToolError(`"${String(path)}" is not valid JSON: ${(error as Error).message}`);
     }
   };
-  const write = (full: string, doc: unknown) => {
+  const historyDir = (full: string) => join(dirname(full), ".docforge-history", basename(full, ".docforge.json"));
+  // History names are timestamps; two writes in the same millisecond must not share one.
+  let lastStamp = 0;
+  /** Save `doc`, keeping the previous file in the history; `tag` marks that copy (an undo keeps the version it replaced as `.undone`). */
+  const write = (full: string, doc: unknown, tag?: string) => {
     if (existsSync(full)) {
-      const history = join(dirname(full), ".docforge-history", basename(full, ".docforge.json"));
+      const history = historyDir(full);
       mkdirSync(history, { recursive: true });
-      copyFileSync(full, join(history, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`));
+      lastStamp = Math.max(Date.now(), lastStamp + 1);
+      copyFileSync(full, join(history, `${new Date(lastStamp).toISOString().replace(/[:.]/g, "-")}${tag ? `.${tag}` : ""}.json`));
       const old = readdirSync(history).sort();
       for (const name of old.slice(0, Math.max(0, old.length - HISTORY_KEEP))) rmSync(join(history, name));
     }
@@ -192,6 +211,9 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
   };
 
   const tools: Record<string, (args: Json) => string> = {
+    get_layout_guide() {
+      return AGENT_GUIDE;
+    },
     create_layout_document(args) {
       const full = inRoot(args.path);
       if (existsSync(full)) throw new ToolError(`"${String(args.path)}" already exists.`);
@@ -221,6 +243,46 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
       if (result.ok && result.doc) write(full, result.doc);
       return writeReport(result.ok ? `Saved ${String(args.path)}.` : "NOT saved: the file is unchanged. Fix the errors and send the ops again.", result, args);
     },
+    undo_layout_change(args) {
+      const full = inRoot(args.path);
+      const current = read(args.path);
+      const steps = typeof args.steps === "number" && Number.isInteger(args.steps) && args.steps >= 1 ? args.steps : 1;
+      const dir = historyDir(full);
+      // Versions saved by writes, oldest first; copies an undo set aside (.undone) are not steps back.
+      const saved = existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".json") && !n.endsWith(".undone.json")).sort() : [];
+      const load = (name: string): unknown => JSON.parse(readFileSync(join(dir, name), "utf8"));
+      const same = JSON.stringify(current);
+      // Where the file stands now: on a saved version (after an undo) or past the newest one.
+      let position = saved.length;
+      for (let i = saved.length - 1; i >= 0; i--) {
+        if (JSON.stringify(load(saved[i] as string)) === same) {
+          position = i;
+          break;
+        }
+      }
+      const index = position - steps;
+      if (index < 0) {
+        throw new ToolError(
+          position === 0 ? "Nothing to undo: this is the oldest version kept in .docforge-history/." : `Only ${position} earlier version${position === 1 ? "" : "s"} kept; ask for fewer steps.`,
+        );
+      }
+      const name = saved[index] as string;
+      const target = load(name);
+      write(full, target, "undone");
+      const ids = (doc: unknown) => new Set(((doc as { components?: { id: string }[] }).components ?? []).map((c) => c.id));
+      const before = ids(current);
+      const after = ids(target);
+      const back = [...after].filter((id) => !before.has(id));
+      const gone = [...before].filter((id) => !after.has(id));
+      const when = name.slice(11, 19).replace(/-/g, ":");
+      return [
+        `Undid ${steps} change${steps === 1 ? "" : "s"}: ${String(args.path)} is back to the version saved at ${when} UTC.`,
+        ...(back.length ? [`Back: ${back.join(", ")}.`] : []),
+        ...(gone.length ? [`Gone: ${gone.join(", ")}.`] : []),
+        engine.map(target, { level: 0 }).text,
+        "Undo again to go one more step back.",
+      ].join("\n");
+    },
     preview_layout(args) {
       const doc = args.content ?? read(args.path);
       if (Array.isArray(args.ops) && args.ops.length) {
@@ -232,11 +294,14 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
       );
     },
     measure_component(args) {
-      return engine.measure(args.component, {
+      const list = Array.isArray(args.components) ? args.components : args.component !== undefined ? [args.component] : [];
+      if (!list.length) throw new ToolError("Give `component`, or `components` to measure several in one call.");
+      const measureOptions = {
         ...(args.path ? { doc: read(args.path) } : {}),
         ...(Array.isArray(args.widths) ? { widths: args.widths as number[] } : {}),
         ...(Array.isArray(args.cols) ? { cols: args.cols as [number, number][] } : {}),
-      }).text;
+      };
+      return list.map((component) => engine.measure(component, measureOptions).text).join("\n\n");
     },
     review_layout(args) {
       return engine.review(read(args.path)).text;
@@ -285,8 +350,8 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
         return reply({
           protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
           capabilities: { tools: {}, resources: {} },
-          serverInfo: { name: "docforge-layout", version: "0.3.0" },
-          instructions: `Layout documents as local .docforge.json files under ${root}: components placed on a unit grid, measured without a browser. Read ${GUIDE_URI} before the first one; read the map instead of looking at pages; measure and preview before writing.`,
+          serverInfo: { name: "docforge-layout", version: LIB_VERSION },
+          instructions: `Layout documents as local .docforge.json files under ${root}: components placed on a unit grid, measured without a browser. Read the guide (get_layout_guide, or ${GUIDE_URI}) before the first one. Build a page with one apply_layout_ops holding every component and read the summary it returns; it reports sizes and problems, so measure or preview only to choose between options. To change an existing document, send only what changes (edit, then fit to stay within N pages; move to reorder sections), never rebuild the layout.`,
         });
       }
       case "ping":
