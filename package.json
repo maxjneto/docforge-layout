@@ -4,7 +4,12 @@
   "description": "DocForge document format: components placed on a unit grid, measured without a browser, rendered to HTML and print-ready pages.",
   "license": "MIT",
   "author": "Max Aragão",
-  "homepage": "https://doc-forge.dev",
+  "homepage": "https://github.com/maxjneto/docforge-layout#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maxjneto/docforge-layout.git"
+  },
+  "bugs": "https://github.com/maxjneto/docforge-layout/issues",
   "keywords": [
     "docforge",
     "layout",
