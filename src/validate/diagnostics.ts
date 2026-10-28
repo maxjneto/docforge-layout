@@ -29,6 +29,7 @@ export type DiagnosticCode =
   | "fit-result"
   | "fit-failed"
   | "text-replaced"
+  | "move-result"
   | "unknown-link-target"
   | "unsafe-link";
 

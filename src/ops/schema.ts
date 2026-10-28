@@ -112,6 +112,24 @@ export const OP_SCHEMAS = {
       align: z.enum(["top", "stretch"]).optional(),
     })
     .strict(),
+  /**
+   * Move a block before or after another component, like moving a section in a text:
+   * what was below the block moves up into its place, and the target and what is below
+   * it move down to make room. The block is `component`, or with `through` every
+   * component whose top is between theirs on one page (rows move whole). Components in
+   * other columns beside the block stay. `gap` overrides the units kept after the block.
+   */
+  move: z
+    .object({
+      op: z.literal("move"),
+      component: Ref,
+      through: Ref.optional(),
+      before: Ref.optional(),
+      after: Ref.optional(),
+      gap: Int0.optional(),
+    })
+    .strict()
+    .refine((o) => (o.before === undefined) !== (o.after === undefined), { message: "give before or after (one of them)" }),
   remove: z.object({ op: z.literal("remove"), component: Ref }).strict(),
   setStyle: SetStyleSchema,
   setRegion: z.object({ op: z.literal("setRegion"), region: RegionSchema }).strict(),
@@ -161,8 +179,9 @@ export const OP_SCHEMAS = {
   /**
    * Make the document fit `pages` (default: the surface's maxPages) with the strategies
    * named, mildest first: compact, heights (minimum heights down to what content needs),
-   * spacing, type (text sizes down to `minScale`).
-   * Applies nothing when it cannot fit, and says so.
+   * spacing (to 75%, the gap between boxes never closed), type (text sizes down to
+   * `minScale`, default 0.9). Without `strategies`, only compact and heights: the page
+   * keeps its look. Applies nothing when it cannot fit, and says so.
    */
   fit: z
     .object({

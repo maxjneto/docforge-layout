@@ -169,6 +169,68 @@ describe("operations", () => {
   });
 });
 
+describe("move", () => {
+  const box = (id: string, y: number, h: number, x = 0, w = 40, page = 1) => ({ id, type: "divider", props: { kind: "space" }, at: at(x, y, w, h, page) });
+  const ys = (d: unknown) => Object.fromEntries((d as LayoutDocument).components.map((c) => [c.id, c.at?.y]));
+
+  it("moves a section before another and the rest follows", () => {
+    // Two sections (a+b, c+d) and a footer (e).
+    const d = doc({ components: [box("a", 0, 4), box("b", 6, 10), box("c", 18, 4), box("d", 24, 8), box("e", 34, 4)] });
+    const r = engine.apply(d, [{ op: "move", component: "c", through: "d", before: "a" }]);
+    expect(r.ok).toBe(true);
+    expect(ys(r.doc)).toEqual({ c: 0, d: 6, a: 16, b: 22, e: 34 });
+    // Everything that moved was part of the op, not a side effect.
+    expect(r.changes).toEqual([]);
+    expect(r.summary).toMatch(/note: Moved c, d before a \(16 rows\); 2 other component\(s\) followed \(a, b\)/);
+  });
+
+  it("moves a row down after another component, as a whole, closing its gap", () => {
+    const d = doc({ components: [box("a", 0, 4), box("r1", 6, 6), box("r2", 6, 6, 45), box("b", 14, 4), box("c", 20, 4)] });
+    const r = engine.apply(d, [{ op: "move", component: "r1", through: "r2", after: "c" }]);
+    expect(r.ok).toBe(true);
+    expect(ys(r.doc)).toEqual({ a: 0, r1: 18, r2: 18, b: 6, c: 12 });
+    expect(r.doc?.components.find((c) => c.id === "r2")?.at?.x).toBe(45);
+  });
+
+  it("after a component means after its whole row", () => {
+    const d = doc({ components: [box("k1", 0, 4), box("k2", 0, 10, 45), box("m", 30, 4)] });
+    const r = engine.apply(d, [{ op: "move", component: "m", after: "k1" }]);
+    expect(ys(r.doc)).toEqual({ k1: 0, k2: 0, m: 12 });
+  });
+
+  it("leaves components in other columns beside the block where they are", () => {
+    const d = doc({ components: [box("a", 0, 4), box("b", 6, 4), box("side", 6, 20, 45), box("c", 12, 4)] });
+    const r = engine.apply(d, [{ op: "move", component: "b", after: "c" }]);
+    expect(ys(r.doc)).toEqual({ a: 0, b: 12, side: 6, c: 6 });
+  });
+
+  it("moves a block to another page", () => {
+    const d = doc({ components: [box("a", 0, 4), box("b", 6, 4), box("c", 0, 4, 0, 40, 2), box("d", 6, 4, 0, 40, 2)] });
+    const r = engine.apply(d, [{ op: "move", component: "b", before: "d" }]);
+    const placed = (id: string) => r.doc?.components.find((c) => c.id === id)?.at;
+    expect(placed("b")).toMatchObject({ page: 2, y: 6 });
+    expect(placed("d")).toMatchObject({ page: 2, y: 12 });
+    expect(placed("a")).toMatchObject({ page: 1, y: 0 });
+  });
+
+  it("refuses targets inside or beside the block, and needs exactly one of before/after", () => {
+    const d = doc({ components: [box("a", 0, 4), box("b", 6, 4), box("side", 6, 4, 45), box("c", 12, 4)] });
+    const cases: [unknown, RegExp][] = [
+      [{ op: "move", component: "a", through: "b", before: "b" }, /is in the block/],
+      [{ op: "move", component: "b", after: "side" }, /beside the block/],
+      [{ op: "move", component: "c", through: "a", before: "a" }, /must be at or below/],
+      [{ op: "move", component: "a", before: "nope" }, /does not exist/],
+      [{ op: "move", component: "a" }, /before or after/],
+      [{ op: "move", component: "a", before: "b", after: "c" }, /before or after/],
+    ];
+    for (const [op, message] of cases) {
+      const r = engine.apply(d, [op as Op]);
+      expect(r.ok, JSON.stringify(op)).toBe(false);
+      expect(r.diagnostics[0]?.message).toMatch(message);
+    }
+  });
+});
+
 describe("compact and fit", () => {
   const box = (id: string, y: number, h: number, x = 0, w = 40, page = 1) => ({ id, type: "divider", props: { kind: "space" }, at: at(x, y, w, h, page) });
 
@@ -246,6 +308,28 @@ describe("compact and fit", () => {
     expect(engine.layout(r.doc).pages).toHaveLength(1);
     expect(r.doc?.components[0]?.at?.h).toBeLessThan(10);
     expect(r.diagnostics.find((x) => x.code === "fit-result")?.message).toMatch(/heights/);
+  });
+
+  it("fit without strategies keeps the page's look: no tighter spacing, no smaller type, and says what to try", () => {
+    const paragraphs = Array.from({ length: 22 }, () => lorem);
+    const d = doc({ components: [{ id: "t", type: "text", content: { paragraphs }, at: at(0, 0, 87) }] });
+    expect(engine.layout(d).pages).toHaveLength(2);
+    const r = engine.apply(d, [{ op: "fit", pages: 1 }]);
+    const failed = r.diagnostics.find((x) => x.code === "fit-failed");
+    expect(failed?.message).toMatch(/Nothing changed/);
+    expect(failed?.suggestions?.join(" ")).toMatch(/"strategies": \["compact", "heights", "spacing", "type"\]/);
+    expect(r.doc?.tokens).toBeUndefined();
+    expect(r.doc?.grid).toEqual(d.grid);
+  });
+
+  it("fit with spacing tightens to 75% at most and never closes the gap between boxes", () => {
+    const d = doc({ components: Array.from({ length: 60 }, (_, i) => box(`b${i}`, i * 3, 1)) });
+    expect(engine.layout(d).pages.length).toBeGreaterThan(1);
+    const r = engine.apply(d, [{ op: "fit", pages: 1, strategies: ["compact", "spacing"] }]);
+    expect(engine.layout(r.doc).pages).toHaveLength(1);
+    expect(r.doc?.grid?.gap).toBe(1);
+    expect(r.diagnostics.find((x) => x.code === "fit-result")?.message).toMatch(/spacing ×0\.75/);
+    expect(r.diagnostics.find((x) => x.code === "fit-result")?.message).not.toMatch(/×0\.5/);
   });
 
   it("fit uses the surface's maxPages, and changes nothing when it cannot fit", () => {

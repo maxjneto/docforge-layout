@@ -6,6 +6,16 @@ import { diag, type Diagnostic } from "../validate/diagnostics";
 export type FitStrategy = "compact" | "heights" | "spacing" | "type";
 /** Mildest first: closing space changes nothing on the page itself; smaller text changes the most. */
 export const FIT_STRATEGIES: FitStrategy[] = ["compact", "heights", "spacing", "type"];
+/**
+ * What `fit` uses when the caller names none: only what leaves the page looking the same
+ * (empty space closed, boxes no taller than their content). Tighter spacing and smaller
+ * type change how the page reads, so they run only when asked for.
+ */
+export const DEFAULT_FIT_STRATEGIES: FitStrategy[] = ["compact", "heights"];
+/** Smallest text scale `type` goes to when the caller gives no `minScale`. */
+export const DEFAULT_MIN_SCALE = 0.9;
+/** Spacing steps: never below three quarters, and the gap between boxes never closes. */
+const SPACING_STEPS = [0.9, 0.75];
 
 interface Slot {
   page: number;
@@ -95,7 +105,8 @@ const round = (n: number, step: number) => Math.round(n / step) * step;
  * - `compact`: close the empty space above components (see compactDocument);
  * - `heights`: lower minimum heights (`h`) to what the content needs (boxes that fill
  *   their area — KPIs, charts, images — by at most 20%);
- * - `spacing`: tighten the gap between pushed boxes and the space tokens (padding, gaps inside components), to 75% then 50%;
+ * - `spacing`: tighten the space tokens (padding, gaps inside components) to 90% then 75%, and the
+ *   gap between boxes at the 75% step, never below 1 unit;
  * - `type`: scale the text size tokens down in 3% steps, never below `minScale`.
  * Positions are absolute, so space freed by a smaller box stays empty: with `compact`
  * allowed, every later step compacts again. When nothing fits, the original document
@@ -148,9 +159,10 @@ export function fitDocument(
       }
       pages = pagesOf(doc);
     } else if (strategy === "spacing") {
-      for (const scale of [0.75, 0.5]) {
+      const gap = doc.grid?.gap ?? defaultGrid.gap;
+      for (const scale of SPACING_STEPS) {
         const next = structuredClone(doc);
-        next.grid = { ...(next.grid ?? {}), gap: Math.min(next.grid?.gap ?? defaultGrid.gap, scale < 0.75 ? 0 : 1) };
+        next.grid = { ...(next.grid ?? {}), gap: scale >= 0.9 ? gap : Math.max(Math.min(gap, 1), Math.floor(gap * scale)) };
         next.tokens = { ...(next.tokens ?? {}), space: Object.fromEntries(Object.entries(base.space).map(([k, v]) => [k, Math.round(v * scale)])) };
         doc = settle(next);
         pages = pagesOf(doc);
@@ -184,7 +196,7 @@ export function fitTarget(doc: LayoutDocument, pages: number | undefined): numbe
   return surface?.maxPages ?? null;
 }
 
-export function fitNote(outcome: FitOutcome, target: number, before: number): Diagnostic {
+export function fitNote(outcome: FitOutcome, target: number, before: number, strategies: readonly FitStrategy[] = FIT_STRATEGIES): Diagnostic {
   if (outcome.fits && !outcome.steps.length) {
     return diag("info", "fit-result", `Already within ${target} page${target === 1 ? "" : "s"}; nothing changed.`, { data: { pages: before, target } });
   }
@@ -199,7 +211,12 @@ export function fitNote(outcome: FitOutcome, target: number, before: number): Di
     `Could not fit within ${target} page${target === 1 ? "" : "s"}: the best was ${outcome.pages} with ${outcome.steps.join(", ") || "nothing to try"}. Nothing changed.`,
     {
       data: { pages: outcome.pages, before, target, steps: outcome.steps },
-      suggestions: ["Shorten or remove content, allow a smaller minScale, or raise the page limit."],
+      suggestions: [
+        "Shorten or remove content (edit), or raise the page limit.",
+        ...(strategies.includes("spacing") && strategies.includes("type")
+          ? ["Allow a smaller minScale."]
+          : [`For a denser page, allow tighter spacing and smaller type: {"op": "fit", "pages": ${target}, "strategies": ["compact", "heights", "spacing", "type"]}.`]),
+      ],
     },
   );
 }

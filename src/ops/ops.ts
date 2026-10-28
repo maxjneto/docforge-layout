@@ -6,7 +6,8 @@ import type { StyleProps } from "../schema/style";
 import type { TokenOverrides } from "../schema/tokens";
 import { diag, type Diagnostic } from "../validate/diagnostics";
 import { editContent, replaceInContent } from "./content";
-import { compactDocument, FIT_STRATEGIES, fitDocument, fitNote, fitTarget } from "./fit";
+import { compactDocument, DEFAULT_FIT_STRATEGIES, DEFAULT_MIN_SCALE, fitDocument, fitNote, fitTarget } from "./fit";
+import { moveBlock } from "./move";
 import { parseOp, type AtInput, type Op } from "./schema";
 
 export type { AtInput, Op } from "./schema";
@@ -378,6 +379,23 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         notes.push(diag("info", "text-replaced", `Replaced ${total}× in ${hits.join(", ")}.`, { data: { count: total, components: hits } }));
         break;
       }
+      case "move": {
+        const moved = moveBlock(doc, op, ctx.layout(doc));
+        if (typeof moved === "string") {
+          errors.push(opError(moved, { component: op.component }));
+          break;
+        }
+        // The followers moved because they were asked to make room: part of the op, not a side effect.
+        touched.push(...moved.block, ...moved.followed);
+        const where = op.before !== undefined ? `before ${op.before}` : `after ${op.after}`;
+        const rest = moved.followed.length ? `; ${moved.followed.length} other component(s) followed (${moved.followed.join(", ")})` : "";
+        notes.push(
+          diag("info", "move-result", `Moved ${moved.block.join(", ")} ${where} (${moved.rows} rows)${rest}.`, {
+            data: { block: moved.block, followed: moved.followed, rows: moved.rows },
+          }),
+        );
+        break;
+      }
       case "remove": {
         if (!component(op.component)) {
           errors.push(opError(`Component "${op.component}" does not exist.`, { component: op.component }));
@@ -458,8 +476,9 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
           break;
         }
         const pagesBefore = ctx.layout(doc).pages.length;
-        const outcome = fitDocument(doc, target, op.strategies ?? FIT_STRATEGIES, op.minScale ?? 0.85, ctx.layout);
-        notes.push(fitNote(outcome, target, pagesBefore));
+        const strategies = op.strategies ?? DEFAULT_FIT_STRATEGIES;
+        const outcome = fitDocument(doc, target, strategies, op.minScale ?? DEFAULT_MIN_SCALE, ctx.layout);
+        notes.push(fitNote(outcome, target, pagesBefore, strategies));
         if (outcome.fits && outcome.steps.length) {
           // Every component may have moved or changed size: that was the point, so none of it is a side effect.
           touched.push(...outcome.doc.components.map((c) => c.id));
