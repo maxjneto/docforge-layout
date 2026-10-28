@@ -15,7 +15,7 @@ import { readDocument } from "./format";
 import { consoleLogger, type Logger } from "./log";
 import { VERSION, type LayoutDocument } from "./schema/document";
 
-export const DEFAULT_BASE_URL = "https://docforge.dev/api";
+export const DEFAULT_BASE_URL = "https://doc-forge.dev/api";
 
 /** What the server answers, kept as is in the cache. */
 export interface DocumentPayload {
@@ -74,7 +74,7 @@ export class DocForgeError extends Error {
 
 interface LoadOptions {
   /**
-   * The API's address, e.g. `https://docforge.dev/api`. A link carries its own (its
+   * The API's address, e.g. `https://doc-forge.dev/api`. A link carries its own (its
    * origin + `/api`); set this only when the API lives somewhere else.
    */
   baseUrl?: string;

@@ -27,7 +27,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("parsePublicSource", () => {
   it("reads the page link, the API link and a bare token", () => {
-    expect(parsePublicSource("https://docforge.dev/public/abc123")).toEqual({ baseUrl: "https://docforge.dev/api", token: "abc123" });
+    expect(parsePublicSource("https://doc-forge.dev/public/abc123")).toEqual({ baseUrl: "https://doc-forge.dev/api", token: "abc123" });
     expect(parsePublicSource("https://x.dev/api/public/abc123/layout")).toEqual({ baseUrl: "https://x.dev/api", token: "abc123" });
     expect(parsePublicSource("abc123", "http://localhost:8000/api/")).toEqual({ baseUrl: "http://localhost:8000/api", token: "abc123" });
     // An explicit address wins over the link's (frontend and API on different hosts).
@@ -35,7 +35,7 @@ describe("parsePublicSource", () => {
   });
 
   it("refuses something that is neither", () => {
-    expect(() => parsePublicSource("https://docforge.dev/document/abc")).toThrow(DocForgeError);
+    expect(() => parsePublicSource("https://doc-forge.dev/document/abc")).toThrow(DocForgeError);
     expect(() => parsePublicSource("a/b")).toThrow(DocForgeError);
   });
 });
@@ -43,8 +43,8 @@ describe("parsePublicSource", () => {
 describe("fetchPublished", () => {
   it("asks for this library's format and returns the document", async () => {
     const s = server(json(payload()));
-    const r = await fetchPublished("https://docforge.dev/public/tok", { fetch: s.fetch, cache: false });
-    expect(s.calls[0]?.url).toBe("https://docforge.dev/api/public/tok/layout?format=3");
+    const r = await fetchPublished("https://doc-forge.dev/public/tok", { fetch: s.fetch, cache: false });
+    expect(s.calls[0]?.url).toBe("https://doc-forge.dev/api/public/tok/layout?format=3");
     expect(r).toMatchObject({ title: "Anúncio", revision: 7, publishedAt: "2026-10-16T10:00:00Z", fromCache: false, notes: [] });
     expect(r.doc.components[0]?.id).toBe("t");
   });

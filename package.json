@@ -1,10 +1,10 @@
 {
   "name": "@docforge-lib/layout",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "DocForge document format: components placed on a unit grid, measured without a browser, rendered to HTML and print-ready pages.",
   "license": "MIT",
   "author": "Max Aragão",
-  "homepage": "https://docforge.dev",
+  "homepage": "https://doc-forge.dev",
   "keywords": [
     "docforge",
     "layout",

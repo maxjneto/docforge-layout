@@ -55,7 +55,7 @@ Numbers the library formats (chart axes and values) follow `meta.locale` (BCP 47
 npm install @docforge-lib/layout
 ```
 
-Node 20+ or any modern browser. Pin the version you tested with (`~0.5.0`): before 1.0, a minor version may change the API.
+Node 20+ or any modern browser. Pin the version you tested with (`~0.6.0`): before 1.0, a minor version may change the API.
 
 ## Use
 
@@ -98,7 +98,7 @@ import { fetchPublished, createClient, readDocument } from "@docforge-lib/layout
 const { doc } = readDocument(json); // older formats are converted up (with a warning in the log)
 
 // 2. The published version, by its public link or token. Browser or server.
-const published = await fetchPublished("https://docforge.dev/public/<token>");
+const published = await fetchPublished("https://doc-forge.dev/public/<token>");
 
 // 3. By id with an API key: server only (createClient refuses to run in a browser).
 const docforge = createClient({ apiKey: process.env.DOCFORGE_API_KEY! });
