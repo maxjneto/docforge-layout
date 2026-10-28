@@ -1,5 +1,9 @@
 # @docforge-lib/layout
 
+[![CI](https://github.com/maxjneto/docforge-layout/actions/workflows/ci.yml/badge.svg)](https://github.com/maxjneto/docforge-layout/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/@docforge-lib/layout)](https://www.npmjs.com/package/@docforge-lib/layout) ![license](https://img.shields.io/npm/l/@docforge-lib/layout)
+
+Used by [DocForge](https://github.com/maxjneto/doc-forge), where people and their AI agents write documents together.
+
 The DocForge document format: components placed on a grid, **measured without a browser**, rendered to HTML whose pages print to PDF exactly as they look on screen.
 
 An agent never has to look at the page. It reads a text map of the document, asks to put a component somewhere, and gets back a diagnostic: it fits, or "needs 412px; the area is 320px — 92px short", with suggestions.
