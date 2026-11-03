@@ -58,6 +58,11 @@ export const OP_SCHEMAS = {
       labels: z.array(z.string()).optional(),
       /** Merged into the component's own style; `null` clears it. */
       style: StylePropsSchema.nullable().optional(),
+      /**
+       * Style for the component's parts (`header`, `label`, `title-2`…), each merged into
+       * what the part has; a part set to `null` loses its own style, `styles: null` clears them all.
+       */
+      styles: z.record(z.string(), StylePropsSchema.nullable()).nullable().optional(),
     })
     .strict(),
   /**

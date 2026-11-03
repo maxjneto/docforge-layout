@@ -97,14 +97,15 @@ export type Styles = z.infer<typeof StylesSchema>;
 export const FORMAT = "docforge/layout";
 /**
  * The format version this library writes. It goes up whenever the schema accepts
- * something an older library would refuse (3: the `Slide` page size). See `format.ts`.
+ * something an older library would refuse (3: the `Slide` page size; 4: `styles` per
+ * part on a component). See `format.ts`.
  */
-export const VERSION = 3;
+export const VERSION = 4;
 /**
  * Versions read as they are: every change from them to `VERSION` is only the number
- * (2 → 3 added options, removed nothing). Version 1 needs `upgradeDocument`.
+ * (2 → 3 → 4 added options, removed nothing). Version 1 needs `upgradeDocument`.
  */
-export const SAME_SHAPE_VERSIONS = [2, 3] as const;
+export const SAME_SHAPE_VERSIONS = [2, 3, 4] as const;
 
 function versionError(input: unknown): string {
   if (typeof input === "number" && Number.isInteger(input) && input > VERSION) {

@@ -10,29 +10,29 @@ const logs = () => {
 };
 
 describe("format version", () => {
-  it("is 3, and documents come out in it", () => {
-    expect(VERSION).toBe(3);
-    expect(engine.layout(deck).doc?.version).toBe(3);
+  it("is 4, and documents come out in it", () => {
+    expect(VERSION).toBe(4);
+    expect(engine.layout(deck).doc?.version).toBe(4);
   });
 
-  it("reads version 2 as it is (same shape) and answers in 3", () => {
+  it("reads version 2 as it is (same shape) and answers in 4", () => {
     const v2 = { ...(example("relatorio") as object), version: 2 };
     const parsed = DocumentSchema.parse(v2);
-    expect(parsed.version).toBe(3);
+    expect(parsed.version).toBe(4);
     expect(engine.layout(v2).ok).toBe(true);
     const up = upgradeDocument(v2, engine);
     expect(up.ok).toBe(true);
-    expect(up.notes).toEqual(["version 2 → 3: only the number changed"]);
+    expect(up.notes).toEqual(["version 2 → 4: only the number changed"]);
   });
 
   it("refuses a newer version and says to update the library", () => {
-    const r = DocumentSchema.safeParse({ ...deck, version: 4 });
+    const r = DocumentSchema.safeParse({ ...deck, version: 5 });
     expect(r.success).toBe(false);
-    expect(r.error?.issues[0]?.message).toMatch(/format version 4.*reads up to 3.*update @docforge-lib\/layout/);
+    expect(r.error?.issues[0]?.message).toMatch(/format version 5.*reads up to 4.*update @docforge-lib\/layout/);
   });
 
   it("formatOf reads the number or says it is not a document", () => {
-    expect(formatOf(deck)).toBe(3);
+    expect(formatOf(deck)).toBe(4);
     expect(formatOf({ version: "2" })).toBeNull();
     expect(formatOf(null)).toBeNull();
   });
@@ -50,7 +50,7 @@ describe("readDocument", () => {
     const { entries, logger } = logs();
     const r = readDocument({ ...deck, version: 2 }, { logger, source: "anuncio.json" });
     expect(r).toMatchObject({ ok: true, from: 2 });
-    expect(r.doc?.version).toBe(3);
+    expect(r.doc?.version).toBe(4);
     expect(entries.map((e) => e.code)).toEqual(["format_upgraded"]);
     expect(entries[0]?.message).toContain("anuncio.json");
   });
@@ -87,7 +87,7 @@ describe("readDocument", () => {
 describe("downgradeDocument", () => {
   it("writes a slide deck as version 2 with the size spelled out", () => {
     const r = downgradeDocument(deck, 2);
-    expect(r).toMatchObject({ ok: true, from: 3, to: 2 });
+    expect(r).toMatchObject({ ok: true, from: 4, to: 2 });
     const out = r.doc as { version: number; surfaces: { size: unknown }[] };
     expect(out.version).toBe(2);
     expect(out.surfaces[0]?.size).toEqual({ width: 1280, height: 720 });

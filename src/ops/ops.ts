@@ -326,6 +326,17 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         if (op.labels !== undefined) c.labels = [...op.labels];
         if (op.style === null) delete c.style;
         else if (op.style !== undefined) c.style = { ...(c.style ?? {}), ...op.style };
+        const parts = c as { styles?: Record<string, StyleProps> };
+        if (op.styles === null) delete parts.styles;
+        else if (op.styles !== undefined) {
+          const next: Record<string, StyleProps> = { ...(parts.styles ?? {}) };
+          for (const [part, style] of Object.entries(op.styles)) {
+            if (style === null) delete next[part];
+            else next[part] = { ...(next[part] ?? {}), ...style };
+          }
+          if (Object.keys(next).length) parts.styles = next;
+          else delete parts.styles;
+        }
         touched.push(c.id);
         break;
       }

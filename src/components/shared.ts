@@ -59,7 +59,7 @@ export function layoutInline(
 /** One chunk per line, so the text can split across pages between any two lines. */
 export function lineChunks(
   block: TextBlock,
-  options: { x?: number; width: number; align: "left" | "center" | "right"; topGap?: number; decorate?: (x: number, y: number, h: number) => string },
+  options: { x?: number; width: number; align: "left" | "center" | "right"; topGap?: number; decorate?: (x: number, y: number, h: number) => string; part?: string },
 ): Chunk[] {
   return block.lines.map((line, index) => {
     const gap = index === 0 ? (options.topGap ?? 0) : 0;
@@ -74,6 +74,7 @@ export function lineChunks(
           align: options.align,
           firstLine: index,
           lastLine: index + 1,
+          part: options.part,
         }),
     };
   });

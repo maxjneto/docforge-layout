@@ -21,6 +21,7 @@ function rowChunk(
   ctx: ComponentContext,
   background: string | null,
   out: Diagnostic[],
+  part?: string,
 ): Chunk {
   const padX = style.gap;
   const padY = Math.round(style.gap * 0.75);
@@ -32,11 +33,11 @@ function rowChunk(
   return {
     height,
     html: (x, y) => {
-      let html = background ? rect(x, y, ctx.width, height - 1, { background }) : "";
+      let html = background ? rect(x, y, ctx.width, height - 1, { background }, part) : "";
       let cx = x;
       columns.forEach((col, i) => {
         const block = blocks[i] as TextBlock;
-        html += renderTextBlock(block, { x: cx + padX, y: y + padY, width: col.width - padX * 2, align: col.align });
+        html += renderTextBlock(block, { x: cx + padX, y: y + padY, width: col.width - padX * 2, align: col.align, part });
         cx += col.width;
       });
       html += rect(x, y + height - 1, ctx.width, 1, { background: style.borderColor });
@@ -49,7 +50,7 @@ export const tableComponent: ComponentDef<"table"> = {
   type: "table",
   sizing: "content",
   decorated: true,
-  variants: ["header"],
+  variants: ["header", "zebra"],
 
   layout(component, ctx) {
     const diagnostics: Diagnostic[] = [];
@@ -57,7 +58,8 @@ export const tableComponent: ComponentDef<"table"> = {
     const headerStyle = ctx.style("header");
     const showHeader = component.props?.header !== false;
     const zebra = component.props?.zebra === true;
-    const zebraColor = colorValue("$color.subtle", ctx.tokens, "#f3f4f6");
+    // The striped rows' color is the `zebra` part's background (the preset gives it the subtle tone).
+    const zebraColor = ctx.style("zebra").background ?? colorValue("$color.subtle", ctx.tokens, "#f3f4f6");
 
     const specs = component.content.columns.map((c) => (typeof c === "string" ? { header: c } : c));
     const totalWeight = specs.reduce((s, c) => s + (c.width ?? 1), 0);
@@ -80,11 +82,12 @@ export const tableComponent: ComponentDef<"table"> = {
     const chunks: Chunk[] = [];
     let header: Chunk | undefined;
     if (showHeader) {
-      header = rowChunk(columns.map((c) => c.header), columns, headerStyle, ctx, headerStyle.background, diagnostics);
+      header = rowChunk(columns.map((c) => c.header), columns, headerStyle, ctx, headerStyle.background, diagnostics, "header");
       chunks.push(header);
     }
     component.content.rows.forEach((row, index) => {
-      chunks.push(rowChunk(row, columns, style, ctx, zebra && index % 2 === 1 ? zebraColor : style.background, diagnostics));
+      const striped = zebra && index % 2 === 1;
+      chunks.push(rowChunk(row, columns, style, ctx, striped ? zebraColor : style.background, diagnostics, striped ? "zebra" : undefined));
     });
 
     const needed = chunks.reduce((s, c) => s + c.height, 0);

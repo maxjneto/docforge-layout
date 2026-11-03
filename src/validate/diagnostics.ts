@@ -14,6 +14,7 @@ export type DiagnosticCode =
   | "raw-value"
   | "invalid-style-value"
   | "style-conflict"
+  | "unknown-part"
   | "unknown-font"
   | "missing-glyphs"
   | "word-broken"

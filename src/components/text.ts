@@ -37,7 +37,8 @@ export const textComponent: ComponentDef<"text"> = {
           width,
           align: style.align,
           topGap: index === 0 ? 0 : gap,
-          decorate: quote ? (x, y, hgt) => rect(x, y, QUOTE_BAR, hgt, { background: style.accent }) : undefined,
+          decorate: quote ? (x, y, hgt) => rect(x, y, QUOTE_BAR, hgt, { background: style.accent }, role) : undefined,
+          part: role,
         }),
       );
     });

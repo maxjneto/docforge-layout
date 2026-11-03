@@ -74,9 +74,9 @@ export const kpiComponent: ComponentDef<"kpi"> = {
             let top = y + offset;
             let html = renderTextBlock(valueBlock, { x, y: top, width: ctx.width, align: style.align });
             top += valueBlock.height + VALUE_LABEL_GAP;
-            html += renderTextBlock(labelBlock, { x, y: top, width: ctx.width, align: labelStyle.align });
+            html += renderTextBlock(labelBlock, { x, y: top, width: ctx.width, align: labelStyle.align, part: "label" });
             top += labelBlock.height + LABEL_DELTA_GAP;
-            if (deltaBlock) html += renderTextBlock(deltaBlock, { x, y: top, width: ctx.width, align: deltaStyle.align });
+            if (deltaBlock) html += renderTextBlock(deltaBlock, { x, y: top, width: ctx.width, align: deltaStyle.align, part: "delta" });
             return html;
           },
         },

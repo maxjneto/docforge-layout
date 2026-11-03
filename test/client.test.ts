@@ -44,7 +44,7 @@ describe("fetchPublished", () => {
   it("asks for this library's format and returns the document", async () => {
     const s = server(json(payload()));
     const r = await fetchPublished("https://doc-forge.dev/public/tok", { fetch: s.fetch, cache: false });
-    expect(s.calls[0]?.url).toBe("https://doc-forge.dev/api/public/tok/layout?format=3");
+    expect(s.calls[0]?.url).toBe("https://doc-forge.dev/api/public/tok/layout?format=4");
     expect(r).toMatchObject({ title: "Anúncio", revision: 7, publishedAt: "2026-10-16T10:00:00Z", fromCache: false, notes: [] });
     expect(r.doc.components[0]?.id).toBe("t");
   });
@@ -109,7 +109,7 @@ describe("createClient", () => {
     const r = await client.get("doc-1", { revision: 7 });
     const again = await client.get("doc-1", { revision: 7 });
     expect(s.calls).toHaveLength(1);
-    expect(s.calls[0]?.url).toBe("http://localhost:8000/api/documents/doc-1/layout?format=3&revision=7");
+    expect(s.calls[0]?.url).toBe("http://localhost:8000/api/documents/doc-1/layout?format=4&revision=7");
     expect(s.calls[0]?.headers["X-API-Key"]).toBe("df_key");
     expect([r.revision, again.revision]).toEqual([7, 7]);
   });

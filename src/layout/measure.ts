@@ -96,7 +96,19 @@ export function measureComponents(input: MeasureInput, out: Diagnostic[]): { pre
       regions: regionsFor(regions, declared),
       componentLabels: component.labels ?? [],
       componentStyle: component.style,
+      componentStyles: component.styles,
     };
+    const parts = defOf(component.type).variants;
+    for (const part of Object.keys(component.styles ?? {})) {
+      if (parts.includes(part)) continue;
+      out.push(
+        diag("warning", "unknown-part", `"${component.id}" styles a part "${part}" that a ${component.type} does not have; it has no effect.`, {
+          component: component.id,
+          data: { part, parts },
+          suggestions: parts.length ? [`Parts of a ${component.type}: ${parts.join(", ")}.`] : [`A ${component.type} has no parts: use "style".`],
+        }),
+      );
+    }
     // One resolution per (component, variant): issues are reported once, origins reused by the map.
     const resolved = new Map<string, ResolvedResult>();
     const resolve = (variant?: string): ResolvedResult => {

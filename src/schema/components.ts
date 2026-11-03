@@ -10,6 +10,8 @@ const base = {
   at: PlacementSchema.optional(),
   labels: z.array(z.string()).optional(),
   style: StylePropsSchema.optional(),
+  /** Style for one part of this component (`header` of a table, `label` of a KPI, `title-2` of a text), over `style`. */
+  styles: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/, "part names use lowercase letters, digits and -"), StylePropsSchema).optional(),
 };
 
 export const ParagraphSchema = z.union([

@@ -12,6 +12,7 @@
  * - 1: sections → bands → items (0.1–0.2). Read with `upgradeDocument`.
  * - 2: free positions in units (0.3).
  * - 3: the `Slide` page size (0.4; 0.4.0 still wrote 2).
+ * - 4: `styles` per part on a component, and the `table.zebra` / `steps.number` parts (0.8).
  */
 
 import { defaultTokens } from "./schema/tokens";
@@ -55,6 +56,24 @@ function walkStrings(value: unknown, visit: (s: string) => void): void {
 
 /** Each step takes a document of version `n` and returns it in version `n - 1`. */
 const DOWN_STEPS: Record<number, (doc: Json) => { doc: Json; notes: string[] }> = {
+  4: (doc) => {
+    const notes: string[] = [];
+    const components = (doc.components as Json[]).map((c) => {
+      if (!c.styles) return c;
+      const { styles, ...rest } = c;
+      notes.push(`"${String(c.id)}": the style of its parts (${Object.keys(styles as Json).join(", ")}) was dropped (version 3 has no styles per part)`);
+      return rest;
+    });
+    const styles = doc.styles as Json | undefined;
+    const document = (styles?.document ?? {}) as Json;
+    const dropped: string[] = Object.keys(document).filter((selector) => selector === "table.zebra" || selector === "steps.number");
+    let nextStyles = doc.styles;
+    if (dropped.length) {
+      notes.push(`document styles for ${dropped.join(", ")} were dropped (version 3 has no such parts)`);
+      nextStyles = { ...styles, document: Object.fromEntries(Object.entries(document).filter(([k]) => !dropped.includes(k))) };
+    }
+    return { doc: { ...doc, version: 3, components, ...(nextStyles !== undefined ? { styles: nextStyles } : {}) }, notes };
+  },
   3: (doc) => {
     const notes: string[] = [];
     const surfaces = (doc.surfaces as Json[]).map((s) => {

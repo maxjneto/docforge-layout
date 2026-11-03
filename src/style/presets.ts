@@ -35,6 +35,8 @@ export const defaultPresets: Record<string, StyleProps> = {
 
   table: { fontSize: "$size.s", gap: "$space.2" },
   "table.header": { fontWeight: 600, background: "$color.subtle" },
+  /** Every other row when `props.zebra` is on: only its background is read. */
+  "table.zebra": { background: "$color.subtle" },
 
   code: {
     fontFamily: "$font.mono",
@@ -46,6 +48,8 @@ export const defaultPresets: Record<string, StyleProps> = {
 
   steps: { gap: "$space.4" },
   "steps.title": { fontWeight: 600 },
+  /** The numbered badge: its text color here; its background is the block's accent unless set. */
+  "steps.number": { color: "#ffffff" },
 
   timeline: { gap: "$space.4" },
   "timeline.date": { fontSize: "$size.s", color: "$color.muted" },

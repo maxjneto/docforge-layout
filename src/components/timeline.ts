@@ -48,8 +48,8 @@ export const timelineComponent: ComponentDef<"timeline"> = {
           if (index > 0) html += rect(mid - 1, cy, 2, gap + dotTop - top, { background: style.borderColor });
           if (!last) html += rect(mid - 1, dotTop + DOT, 2, cy + height - dotTop - DOT, { background: style.borderColor });
           html += rect(mid - DOT / 2, dotTop, DOT, DOT, { background: style.accent, borderRadius: "50%" });
-          html += renderTextBlock(date, { x: cx, y: top + Math.max(0, (firstLine - (date.lines[0]?.height ?? 0)) / 2), width: dateWidth, align: "right" });
-          html += renderTextBlock(title, { x: cx + x, y: top, width, align: titleStyle.align });
+          html += renderTextBlock(date, { x: cx, y: top + Math.max(0, (firstLine - (date.lines[0]?.height ?? 0)) / 2), width: dateWidth, align: "right", part: "date" });
+          html += renderTextBlock(title, { x: cx + x, y: top, width, align: titleStyle.align, part: "title" });
           if (body) html += renderTextBlock(body, { x: cx + x, y: top + title.height + TITLE_TEXT_GAP, width, align: style.align });
           return html;
         },

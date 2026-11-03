@@ -10,7 +10,7 @@ An agent never has to look at the page. It reads a text map of the document, ask
 
 ## How it works
 
-- **The document is JSON** (`version: 3`). Every component has a position `at: { page, x, y, w, h? }` in **grid units**: square cells of `grid.unit` px (8 by default), counted from the top-left corner of the page's content area. The page size only decides how many units fit (A4 with 40px margins: 89 × 130). `grid.columns` and `grid.gutter` draw **guides** — the editor snaps to them and ops may place by `cols: [1, 7]` — but never limit where a component goes.
+- **The document is JSON** (`version: 4`). Every component has a position `at: { page, x, y, w, h? }` in **grid units**: square cells of `grid.unit` px (8 by default), counted from the top-left corner of the page's content area. The page size only decides how many units fit (A4 with 40px margins: 89 × 130). `grid.columns` and `grid.gutter` draw **guides** — the editor snaps to them and ops may place by `cols: [1, 7]` — but never limit where a component goes.
 - **Content decides the height.** `h` is a minimum: a component whose content needs more grows. Whatever a growing (or overlapping) box **invades** moves down below it, `grid.gap` units apart, in a chain; nothing else moves. Pushes are computed, never stored, so a box returns to its place when what pushed it shrinks.
 - **The library paginates.** A box that crosses the bottom of a page splits between lines/rows when it can (text, list, table, code, steps, timeline — tables repeat their header) or moves whole to the next page; either way it pushes what it meets there. `maxPages` on a surface is reported when exceeded, never refused.
 - **The library measures text itself.** It reads the same font files the browser renders with (fontkit), decides every line break, and draws each line ready-made (`white-space: pre`). The browser never re-wraps, so a height computed here is the height on screen and in print.
@@ -116,10 +116,10 @@ A link only ever serves what its owner **published**: later edits stay private u
 
 ### Format versions
 
-Documents carry a format `version` (now 3). It goes up whenever the schema accepts something an older library would refuse, and each release that raises it adds the conversion one step down.
+Documents carry a format `version` (now 4: `styles` per part on a component; 3 added the `Slide` page size). It goes up whenever the schema accepts something an older library would refuse, and each release that raises it adds the conversion one step down.
 
 - **Older document, newer library:** read as it is (2 → 3 changed only the number) or converted (`upgradeDocument` for version 1), with a `format_upgraded` warning.
-- **Newer document, older library:** refused with `format_unsupported`, naming the version to update to. When you load from DocForge this does not happen: every request says which format this library reads (`?format=3`), the server converts down with `downgradeDocument` and lists what the older format cannot say (a 16:9 slide written as a 1280×720 page, a theme font older libraries do not bundle), and the library logs it as `format_downgraded`.
+- **Newer document, older library:** refused with `format_unsupported`, naming the version to update to. When you load from DocForge this does not happen: every request says which format this library reads (`?format=4`), the server converts down with `downgradeDocument` and lists what the older format cannot say (a 16:9 slide written as a 1280×720 page, a theme font older libraries do not bundle), and the library logs it as `format_downgraded`.
 - `downgradeDocument(doc, 2)` is public too, if you serve documents to older libraries yourself.
 
 Warnings go to `console.warn` with a stable `code`: `format_upgraded`, `format_downgraded`, `format_unsupported`, `revision_unpinned`, `served_from_cache`. Pass `logger: (entry) => …` to route them into your logs, or `silentLogger`.
