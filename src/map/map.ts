@@ -150,6 +150,14 @@ export function settingsLines(result: LayoutResult): string[] {
   lines.push(`document styles: ${docStyles.join(", ") || "none"} · regions: ${regions.join(", ") || "none"}`);
   const others = doc.surfaces.filter((s) => s.id !== result.surface?.id).map((s) => s.id);
   if (others.length) lines.push(`other surfaces: ${others.join(", ")}`);
+  const master = result.surface?.kind === "page" ? result.surface.master : undefined;
+  if (master) {
+    const which = master.pages === undefined || master.pages === "all" ? "every page" : master.pages === "except-first" ? "every page but the first" : `pages ${master.pages.join(", ")}`;
+    const reserve = `reserve ${master.reserve?.top ?? 0} rows at the top, ${master.reserve?.bottom ?? 0} at the bottom (the body's y 0 is below the top reserve)`;
+    const parts = master.components.map((c) => `${c.id} ${defOf(c.type).describe(c as never)} (x${c.at.x} y${c.at.y} w${c.at.w} h${c.at.h})`);
+    lines.push(`master: ${master.components.length} component(s) on ${which} · ${reserve}`);
+    if (parts.length) for (const part of parts) lines.push(`  ${part}`);
+  }
   return lines;
 }
 
@@ -163,7 +171,7 @@ function level0(result: LayoutResult): string {
     `components: ${doc.components.length} (${[...byType].map(([t, n]) => `${t} ${n}`).join(", ") || "none"})`,
   ];
   for (const page of result.pages) {
-    const ids = page.boxes.map((b) => (b.piece ? `${b.component} (cont.)` : b.component));
+    const ids = page.boxes.filter((b) => !b.layer).map((b) => (b.piece ? `${b.component} (cont.)` : b.component));
     lines.push(`page ${page.index + 1}: ${ids.join(", ") || "(empty)"}`);
   }
   const unplaced = doc.components.filter((c) => !c.at).map((c) => c.id);
@@ -182,7 +190,7 @@ function level1(result: LayoutResult, options: MapOptions): string {
   for (const page of result.pages) {
     const number = page.index + 1;
     if (wanted && !wanted.has(number)) continue;
-    const boxes = page.boxes;
+    const boxes = page.boxes.filter((b) => !b.layer);
     const lowest = Math.max(0, ...boxes.map((b) => Math.round((b.y - page.content.y + b.height) / result.grid.unit)));
     lines.push("", `page ${number}/${result.pages.length} · ${`${boxes.length} box${boxes.length === 1 ? "" : "es"}`} · ${page.rows - lowest} free rows at the bottom`);
     if (options.draw !== false) {

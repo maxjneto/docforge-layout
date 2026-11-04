@@ -1,6 +1,8 @@
-import { defOf, type Chunk } from "../components";
+import { defOf, type Chunk, type Mark } from "../components";
 import { diag, type Diagnostic } from "../validate/diagnostics";
+import { absStyle, h } from "../render/html";
 import { renderBox } from "./box";
+import { masterOn, reserveOf } from "./surface";
 import type { ComponentGeometry, Frame, PageLayout, Prepared, UnitBox } from "./types";
 
 /** A box already on the canvas, in global rows (page breaks every `frame.rows`). */
@@ -20,6 +22,41 @@ interface Piece {
 }
 
 const rowsFor = (px: number, unit: number) => Math.max(1, Math.ceil(px / unit - 1e-6));
+
+/**
+ * Where every mark (figure, heading) landed, in reading order (page, then y, then x),
+ * written into the layout's shared `late` values before any chunk is drawn.
+ */
+function resolveLate(
+  prepared: Prepared[],
+  placed: Map<string, Piece[]>,
+  g: { pageStart: (row: number) => number; paged: boolean; R: number; unit: number; pageCount: number },
+): void {
+  const late = prepared[0]?.ctx.late;
+  if (!late) return;
+  const found: { mark: Mark; page: number; y: number; x: number }[] = [];
+  for (const p of prepared) {
+    for (const piece of placed.get(p.component.id) ?? []) {
+      const start = g.pageStart(piece.top);
+      const page = (g.paged ? start / g.R : 0) + 1;
+      let y = (piece.top - start) * g.unit + p.inset;
+      for (const chunk of piece.chunks) {
+        for (const mark of chunk.marks ?? []) found.push({ mark, page, y, x: p.x });
+        y += chunk.height;
+      }
+    }
+  }
+  found.sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x);
+  late.figures.clear();
+  late.pages.clear();
+  late.headings = [];
+  late.pageCount = g.pageCount;
+  for (const { mark, page } of found) {
+    late.pages.set(mark.id, page);
+    if (mark.kind === "figure") late.figures.set(mark.id, late.figures.size + 1);
+    else late.headings.push({ id: mark.id, level: mark.level ?? 1, text: mark.text ?? "", page });
+  }
+}
 
 /**
  * Put every component where it was declared, then resolve what the content changed:
@@ -51,6 +88,14 @@ export function placeComponents(
 
   const pageStart = (row: number) => (paged ? Math.floor(row / R) * R : 0);
   const pageEnd = (row: number) => (paged ? pageStart(row) + R : Number.POSITIVE_INFINITY);
+  const reserve = reserveOf(frame.surface);
+  /** On a page the master skips, a box that fills the page also covers the reserve it touches (px above, px below). */
+  const grownBy = (p: Prepared, piece: Piece): { top: number; bottom: number } => {
+    if (!paged || !defOf(p.component.type).fillsPage) return { top: 0, bottom: 0 };
+    const start = pageStart(piece.top);
+    if (masterOn(frame.surface, start / R)) return { top: 0, bottom: 0 };
+    return { top: piece.top === start ? reserve.top * unit : 0, bottom: piece.top + piece.rows === start + R ? reserve.bottom * unit : 0 };
+  };
 
   const items = prepared.map((p) => {
     const { declared } = p;
@@ -67,7 +112,9 @@ export function placeComponents(
     const naturalPx = p.laid.natural + p.inset * 2;
     const required = rowsFor(neededPx, unit);
     const base = declared.h ?? rowsFor(naturalPx, unit);
-    const rows = Math.max(base, required);
+    let rows = Math.max(base, required);
+    // A box that fills its page asks for at most the body: the reserve it may take is added when drawn.
+    if (Number.isFinite(stride) && defOf(p.component.type).fillsPage && !masterOn(frame.surface, page - 1)) rows = Math.min(rows, Math.max(required, frame.rows));
     return {
       p,
       top: (Number.isFinite(stride) ? (page - 1) * stride : 0) + declared.y,
@@ -91,8 +138,14 @@ export function placeComponents(
     let pushedBy: string | undefined;
     let top = item.top;
 
+    // A continuation piece starts with the header of the chunk it starts at (a table inside a flow) or the component's.
+    const repeatFor = (): Chunk | undefined => queue[0]?.repeat ?? header;
     const chunkRows = (chunks: Chunk[]) => rowsFor(chunks.reduce((s, c) => s + c.height, 0) + p.inset * 2, unit);
-    const restRows = () => (pieces.length === 0 ? item.rows : chunkRows(header ? [header, ...queue] : queue));
+    const restRows = () => {
+      if (pieces.length === 0) return item.rows;
+      const r = repeatFor();
+      return chunkRows(r ? [r, ...queue] : queue);
+    };
 
     // Move `top` down until [top, top + rows) collides with nothing placed in these columns.
     const settle = (rows: () => number) => {
@@ -109,8 +162,11 @@ export function placeComponents(
       const full = restRows();
       // A box that may split only needs room down to the end of the page it starts on.
       settle(() => (splittable ? Math.min(full, pageEnd(top) - top) : full));
-      if (!paged || top + full <= pageEnd(top)) {
-        pieces.push({ top, rows: full, chunks: pieces.length === 0 ? queue.splice(0) : [...(header ? [header] : []), ...queue.splice(0)] });
+      // A page break asked for inside the content (a flow's `break`) splits even what would fit.
+      const forced = splittable && queue.some((c, i) => i > 0 && c.breakBefore);
+      if (!paged || (top + full <= pageEnd(top) && !forced)) {
+        const r = pieces.length === 0 ? undefined : repeatFor();
+        pieces.push({ top, rows: full, chunks: [...(r ? [r] : []), ...queue.splice(0)] });
         break;
       }
       const atPageTop = top === pageStart(top);
@@ -131,14 +187,21 @@ export function placeComponents(
       }
 
       const roomPx = (pageEnd(top) - top) * unit - p.inset * 2;
-      const take: Chunk[] = pieces.length > 0 && header ? [header] : [];
+      const lead = pieces.length > 0 ? repeatFor() : undefined;
+      const take: Chunk[] = lead ? [lead] : [];
       let used = take.reduce((s, c) => s + c.height, 0);
-      while (queue.length && used + (queue[0] as Chunk).height <= roomPx + 0.01) {
+      while (queue.length && used + (queue[0] as Chunk).height <= roomPx + 0.01 && !((queue[0] as Chunk).breakBefore && take.length > (lead ? 1 : 0))) {
         const c = queue.shift() as Chunk;
         take.push(c);
         used += c.height;
       }
-      const tookContent = take.length > (pieces.length > 0 && header ? 1 : 0);
+      // A title is not left alone at the bottom of a page: it moves on with what follows it.
+      if (queue.length) {
+        let keep = take.length;
+        while (keep > (lead ? 1 : 0) && (take[keep - 1] as Chunk).keepWithNext) keep--;
+        if (keep > (lead ? 1 : 0) && keep < take.length) queue.unshift(...take.splice(keep));
+      }
+      const tookContent = take.length > (lead ? 1 : 0);
       if (!tookContent) {
         if (!atPageTop) {
           top = pageEnd(top);
@@ -156,7 +219,8 @@ export function placeComponents(
     // Area components draw into their final height.
     const first = pieces[0] as Piece;
     if (def.sizing === "area") {
-      p.ctx.height = Math.max(0, first.rows * unit - p.inset * 2);
+      const grown = grownBy(p, first);
+      p.ctx.height = Math.max(0, first.rows * unit + grown.top + grown.bottom - p.inset * 2);
       p.laid = def.layout(p.component as never, p.ctx);
       first.chunks = p.laid.chunks;
     }
@@ -202,10 +266,12 @@ export function placeComponents(
       width: frame.width,
       height: paged ? (frame.height as number) : margin.top + contentHeight + margin.bottom,
       boxes: [],
-      content: { x: margin.left, y: margin.top, width: frame.contentWidth, height: contentHeight },
+      content: { x: margin.left, y: margin.top + frame.bodyTop, width: frame.contentWidth, height: contentHeight },
       rows: paged ? R : lowest,
     });
   }
+
+  resolveLate(prepared, placedPieces, { pageStart, paged, R, unit, pageCount });
 
   for (const p of prepared) {
     const pieces = placedPieces.get(p.component.id);
@@ -214,9 +280,22 @@ export function placeComponents(
     pieces.forEach((piece, index) => {
       const start = pageStart(piece.top);
       const page = pages[paged ? start / R : 0] as PageLayout;
+      const grown = grownBy(p, piece);
       const px = margin.left + p.x * unit;
-      const py = margin.top + (piece.top - start) * unit;
-      const hgt = piece.rows * unit;
+      const py = margin.top + frame.bodyTop + (piece.top - start) * unit - grown.top;
+      const hgt = piece.rows * unit + grown.top + grown.bottom;
+      const bleed = index === 0 ? defOf(p.component.type).bleed?.(p.component as never, p.ctx) : null;
+      if (bleed) {
+        page.boxes.push({
+          component: p.component.id,
+          x: 0,
+          y: 0,
+          width: page.width,
+          height: page.height,
+          html: h("div", { class: "dfl-bleed", "aria-hidden": "true", style: absStyle(0, 0, page.width, page.height) }, bleed(page.width, page.height)),
+          layer: "bleed",
+        });
+      }
       page.boxes.push({
         component: p.component.id,
         x: px,
@@ -228,7 +307,8 @@ export function placeComponents(
       });
     });
   }
-  for (const page of pages) page.boxes.sort((a, b) => a.y - b.y || a.x - b.x);
+  // Bleed layers first (under everything), then the body in reading order.
+  for (const page of pages) page.boxes.sort((a, b) => (a.layer === "bleed" ? 0 : 1) - (b.layer === "bleed" ? 0 : 1) || a.y - b.y || a.x - b.x);
 
   const surface = frame.surface;
   if (surface.kind === "page" && surface.maxPages !== undefined && pageCount > surface.maxPages) {

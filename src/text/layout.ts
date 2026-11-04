@@ -115,9 +115,9 @@ function tokenize(runs: StyledRun[]): Token[] {
         endWord();
         tokens.push({ kind: "break" });
       }
-      for (const piece of line.split(/(\s+)/)) {
+      for (const piece of line.split(BREAKABLE_SPACE)) {
         if (piece === "") continue;
-        if (/^\s+$/.test(piece)) {
+        if (ONLY_BREAKABLE.test(piece)) {
           endWord();
           const last = tokens[tokens.length - 1];
           if (last && last.kind === "space") last.parts.push({ run: index, text: piece });
@@ -129,7 +129,29 @@ function tokenize(runs: StyledRun[]): Token[] {
     });
   });
   endWord();
-  return tokens;
+  return keepDigitGroups(tokens);
+}
+
+// Spaces a line may break at. No-break spaces (U+00A0, U+2007, U+202F) are part of the word.
+const BREAKABLE_SPACE = /([^\S\u00A0\u2007\u202F]+)/;
+const ONLY_BREAKABLE = /^[^\S\u00A0\u2007\u202F]+$/;
+
+/** "28 976" is one number: a single space before a group of three digits does not break. */
+function keepDigitGroups(tokens: Token[]): Token[] {
+  const textOf = (t: Token | undefined) => (t && t.kind !== "break" ? t.parts.map((p) => p.text).join("") : "");
+  const out: Token[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i] as Token;
+    const prev = out[out.length - 1];
+    const next = tokens[i + 1];
+    if (token.kind === "space" && textOf(token) === " " && prev?.kind === "word" && next?.kind === "word" && /\d$/.test(textOf(prev)) && /^\d{3}(?!\d)/.test(textOf(next))) {
+      prev.parts.push(...token.parts, ...next.parts);
+      i++;
+      continue;
+    }
+    out.push(token);
+  }
+  return out;
 }
 
 /**
@@ -247,4 +269,21 @@ export function layoutText(
     missingGlyphs: [...missing],
     brokenWords,
   };
+}
+
+/**
+ * How wide text wants to be: `min` is its widest word (any narrower and a word is cut),
+ * `max` its longest line when nothing wraps. A table sizes its columns from these.
+ */
+export function intrinsicWidths(runs: StyledRun[], options: { base: BaseTextStyle; registry: FontRegistry }): { min: number; max: number } {
+  const { registry } = options;
+  const widthOf = (parts: Part[]) =>
+    parts.reduce((sum, part) => {
+      const style = runs[part.run] as StyledRun;
+      return sum + registry.measure(registry.match(style.family, style.weight, style.italic), style.size, part.text);
+    }, 0);
+  let min = 0;
+  for (const token of tokenize(runs)) if (token.kind === "word") min = Math.max(min, widthOf(token.parts));
+  const unbroken = layoutText(runs, { maxWidth: Number.MAX_SAFE_INTEGER, lineHeight: 1, base: options.base, registry });
+  return { min, max: Math.max(min, unbroken.width) };
 }

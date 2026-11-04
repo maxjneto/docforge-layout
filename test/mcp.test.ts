@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -27,6 +27,41 @@ function server() {
 }
 
 describe("stdio MCP server", () => {
+  it("tells the next write and read what someone else changed in the file", async () => {
+    const { root, tool } = server();
+    await tool("create_layout_document", { path: "d.docforge.json" });
+    const add = { op: "add", component: { id: "sec", type: "text", content: { paragraphs: ["Qualidade"] } }, at: { page: 1, cols: [1, 12], y: 0 } };
+    await tool("apply_layout_ops", { path: "d.docforge.json", ops: [add] });
+    expect((await tool("get_layout_map", { path: "d.docforge.json", level: 0 })).text).not.toMatch(/someone else/);
+
+    // A person edits the file (the editor, or by hand).
+    const file = join(root, "d.docforge.json");
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    doc.components[0].content.paragraphs[0] = "Qualidade e testes";
+    writeFileSync(file, JSON.stringify(doc));
+
+    const map = await tool("get_layout_map", { path: "d.docforge.json", level: 0 });
+    expect(map.text).toMatch(/^Changed by someone else/);
+    expect(map.text).toContain('sec  content.paragraphs.0: "Qualidade" → "Qualidade e testes"');
+    const write = await tool("apply_layout_ops", { path: "d.docforge.json", ops: [{ op: "setMeta", meta: { title: "R" } }] });
+    expect(write.text).toMatch(/^Changed by someone else[\s\S]*Saved d\.docforge\.json/);
+    // After this server's write, it is no longer news.
+    expect((await tool("get_layout_map", { path: "d.docforge.json", level: 0 })).text).not.toMatch(/someone else/);
+    // The snapshot is not a version: undo goes back one write, not to the snapshot.
+    expect((await tool("undo_layout_change", { path: "d.docforge.json" })).text).toMatch(/^Undid 1 change/);
+  });
+
+  it("serves the part of the guide for changing a document", async () => {
+    const { tool } = server();
+    const change = (await tool("get_layout_guide", { topic: "change" })).text;
+    const full = (await tool("get_layout_guide", {})).text;
+    expect(full).toBe(AGENT_GUIDE);
+    expect(change.length).toBeLessThan(full.length * 0.8);
+    expect(change).toContain("## Changing a finished document");
+    expect(change).toContain("## Operations");
+    expect(change).not.toContain("## Work in few calls");
+  });
+
   it("initializes, lists its tools and serves the guide", async () => {
     const { call, handle } = server();
     const init = await call("initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test" } });
@@ -58,7 +93,7 @@ describe("stdio MCP server", () => {
     const full = await tool("preview_layout", { path: "docs/q3.docforge.json", ops: [{ op: "edit", component: "t", set: { "paragraphs.0": "Oi" } }], map: "full" });
     expect(full.text).toMatch(/Map \(level 1\)/);
     expect(JSON.parse(readFileSync(file, "utf8")).components[0].id).toBe("t");
-    expect(readdirSync(join(root, "docs", ".docforge-history", "q3"))).toHaveLength(1);
+    expect(readdirSync(join(root, "docs", ".docforge-history", "q3")).filter((n) => n.endsWith(".json"))).toHaveLength(1);
 
     const refused = await tool("apply_layout_ops", { path: "docs/q3.docforge.json", ops: [{ op: "remove", component: "nope" }] });
     expect(refused.text).toMatch(/^NOT saved/);

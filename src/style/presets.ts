@@ -24,6 +24,8 @@ export const defaultPresets: Record<string, StyleProps> = {
   },
 
   text: { gap: "$space.3" },
+  /** The one large sentence of a slide. */
+  "text.display": { fontFamily: "$font.heading", fontSize: "$size.display", fontWeight: 700, lineHeight: "$lineHeight.tight" },
   "text.title-1": { fontFamily: "$font.heading", fontSize: "$size.xxl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
   "text.title-2": { fontFamily: "$font.heading", fontSize: "$size.xl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
   "text.title-3": { fontFamily: "$font.heading", fontSize: "$size.l", fontWeight: 600, lineHeight: "$lineHeight.tight" },
@@ -33,8 +35,15 @@ export const defaultPresets: Record<string, StyleProps> = {
 
   list: { gap: "$space.1" },
 
+  /** Space between blocks; a block opening with a title gets twice as much above it. */
+  flow: { gap: "$space.3" },
+
   table: { fontSize: "$size.s", gap: "$space.2" },
   "table.header": { fontWeight: 600, background: "$color.subtle" },
+  /** Every other row when `props.zebra` is on: only its background is read. */
+  "table.zebra": { background: "$color.subtle" },
+  /** The `footer` row (totals). */
+  "table.footer": { fontWeight: 600, background: "$color.subtle" },
 
   code: {
     fontFamily: "$font.mono",
@@ -46,6 +55,8 @@ export const defaultPresets: Record<string, StyleProps> = {
 
   steps: { gap: "$space.4" },
   "steps.title": { fontWeight: 600 },
+  /** The numbered badge: its text color here; its background is the block's accent unless set. */
+  "steps.number": { color: "#ffffff" },
 
   timeline: { gap: "$space.4" },
   "timeline.date": { fontSize: "$size.s", color: "$color.muted" },
@@ -79,4 +90,40 @@ export const defaultPresets: Record<string, StyleProps> = {
   chart: { fontSize: "$size.xs", color: "$color.muted" },
 
   divider: { borderWidth: 1 },
+
+  /** The bar and icon take the kind's accent (`callout.<kind>`). */
+  callout: { background: "$color.subtle", padding: "$space.3", radius: "$radius.s", gap: "$space.2" },
+  "callout.title": { fontWeight: 600 },
+  "callout.note": { accent: "$color.primary" },
+  "callout.tip": { accent: "$color.success" },
+  "callout.warning": { accent: "$color.warning" },
+  "callout.important": { accent: "$color.danger" },
+  "callout.success": { accent: "$color.success" },
+
+  tags: { gap: "$space.1" },
+  /** Each tag: its text, and its background when the item gives no color. */
+  "tags.tag": { fontSize: "$size.s", background: "$color.subtle" },
+
+  progress: { fontSize: "$size.s", gap: "$space.2" },
+  "progress.value": { color: "$color.muted" },
+
+  cover: { padding: "$space.6", gap: "$space.3" },
+  "cover.eyebrow": { fontSize: "$size.s", fontWeight: 600, color: "$color.muted" },
+  "cover.title": { fontFamily: "$font.heading", fontSize: "$size.display", fontWeight: 700, lineHeight: "$lineHeight.tight" },
+  "cover.subtitle": { fontSize: "$size.l", color: "$color.muted" },
+  "cover.meta-label": { fontSize: "$size.xs", fontWeight: 600, color: "$color.muted" },
+  "cover.meta": { fontSize: "$size.s" },
+
+  toc: { gap: "$space.2" },
+  "toc.title": { fontFamily: "$font.heading", fontSize: "$size.xl", fontWeight: 700, lineHeight: "$lineHeight.tight" },
+  "toc.entry-1": { fontWeight: 600, gap: "$space.3" },
+  "toc.entry-2": { gap: "$space.1" },
+  "toc.entry-3": { fontSize: "$size.s", gap: "$space.1" },
+  "toc.page": { color: "$color.muted" },
+
+  /** Header and footer text in a page master (its components take this over their own presets). */
+  master: { color: "$color.pageChrome", fontSize: "$size.s" },
+
+  /** The line under an image. */
+  "image.caption": { fontSize: "$size.s", color: "$color.muted" },
 };

@@ -28,6 +28,6 @@ export type Run = z.infer<typeof RunSchema>;
 export const InlineSchema = z.union([z.string(), z.array(RunSchema)]);
 export type Inline = z.infer<typeof InlineSchema>;
 
-export const TEXT_ROLES = ["title-1", "title-2", "title-3", "subtitle", "body", "quote", "caption"] as const;
+export const TEXT_ROLES = ["display", "title-1", "title-2", "title-3", "subtitle", "body", "quote", "caption"] as const;
 export type TextRole = (typeof TEXT_ROLES)[number];
 export const TextRoleSchema = z.enum(TEXT_ROLES);

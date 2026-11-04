@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ComponentSchema } from "./components";
+import { ComponentSchema, MasterSchema } from "./components";
 import { RectSchema } from "./placement";
 import { StylePropsSchema } from "./style";
 import { TokenOverridesSchema } from "./tokens";
@@ -47,7 +47,7 @@ export const PAGE_SIZES = {
 } as const;
 export type PageSizeName = keyof typeof PAGE_SIZES;
 
-export const SurfaceSchema = z.discriminatedUnion("kind", [
+const SurfaceUnion = z.discriminatedUnion("kind", [
   z
     .object({
       id: Id,
@@ -59,6 +59,8 @@ export const SurfaceSchema = z.discriminatedUnion("kind", [
       margin: Margin,
       /** Going over is reported, never refused. */
       maxPages: z.number().int().min(1).optional(),
+      /** Header, footer, page numbers… drawn on every page (see MasterSchema). */
+      master: MasterSchema.optional(),
     })
     .strict(),
   z
@@ -71,7 +73,8 @@ export const SurfaceSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-export type Surface = z.infer<typeof SurfaceSchema>;
+export type Surface = z.infer<typeof SurfaceUnion>;
+export const SurfaceSchema: z.ZodType<Surface> = SurfaceUnion;
 
 /** A style layer bound to an area of the grid: components whose declared top-left corner is inside get it. */
 export const RegionSchema = z
@@ -97,14 +100,15 @@ export type Styles = z.infer<typeof StylesSchema>;
 export const FORMAT = "docforge/layout";
 /**
  * The format version this library writes. It goes up whenever the schema accepts
- * something an older library would refuse (3: the `Slide` page size). See `format.ts`.
+ * something an older library would refuse (3: the `Slide` page size; 4: `styles` per
+ * part on a component). See `format.ts`.
  */
-export const VERSION = 3;
+export const VERSION = 4;
 /**
  * Versions read as they are: every change from them to `VERSION` is only the number
- * (2 → 3 added options, removed nothing). Version 1 needs `upgradeDocument`.
+ * (2 → 3 → 4 added options, removed nothing). Version 1 needs `upgradeDocument`.
  */
-export const SAME_SHAPE_VERSIONS = [2, 3] as const;
+export const SAME_SHAPE_VERSIONS = [2, 3, 4] as const;
 
 function versionError(input: unknown): string {
   if (typeof input === "number" && Number.isInteger(input) && input > VERSION) {
@@ -114,13 +118,11 @@ function versionError(input: unknown): string {
   return `expected format version ${VERSION}`;
 }
 
-export const DocumentSchema = z
+const DocumentObject = z
   .object({
     format: z.literal(FORMAT),
     // Older versions with the same shape are accepted and come out as the current one.
-    version: z
-      .union(SAME_SHAPE_VERSIONS.map((v) => z.literal(v)), { error: (issue) => versionError(issue.input) })
-      .transform((): typeof VERSION => VERSION),
+    version: z.union(SAME_SHAPE_VERSIONS.map((v) => z.literal(v)), { error: (issue) => versionError(issue.input) }),
     meta: z
       .object({
         title: z.string().optional(),
@@ -128,6 +130,8 @@ export const DocumentSchema = z
         locale: z.string().regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/).optional(),
         /** Name of the theme the tokens came from (informative: the tokens are what renders). */
         theme: z.string().max(120).optional(),
+        /** The document's date (YYYY-MM-DD), shown by `{date}` in the master; today when absent. */
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       })
       .catchall(z.unknown())
       .optional(),
@@ -139,7 +143,27 @@ export const DocumentSchema = z
   })
   .strict();
 
-export type LayoutDocument = z.infer<typeof DocumentSchema>;
+/** A document as this library reads it: always the current version. */
+export type LayoutDocument = Omit<z.output<typeof DocumentObject>, "version"> & { version: typeof VERSION };
+
+/** A layout document. Older versions with the same shape are read and come out as the current one. */
+export const DocumentSchema: z.ZodType<LayoutDocument, z.input<typeof DocumentObject>> = DocumentObject.transform(({ version, ...doc }) => ({
+  ...doc,
+  version: VERSION as typeof VERSION,
+  components: keepOlderLook(version, doc.components),
+}));
+
+/**
+ * Defaults that changed with a version, written out on documents from before it so they
+ * look the same as they did: before 4, tables without weights split the width evenly
+ * (from 4 they size columns by content).
+ */
+function keepOlderLook(version: number, components: z.infer<typeof ComponentSchema>[]): z.infer<typeof ComponentSchema>[] {
+  if (version >= 4) return components;
+  return components.map((c) =>
+    c.type === "table" && c.props?.columnWidths === undefined ? { ...c, props: { ...c.props, columnWidths: "fixed" as const } } : c,
+  );
+}
 
 /** A document with nothing in it: one A4 surface. */
 export function emptyDocument(title?: string): LayoutDocument {

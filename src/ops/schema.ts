@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ComponentSchema } from "../schema/components";
+import { ComponentSchema, MasterSchema } from "../schema/components";
 import { GridSchema, RegionSchema, SurfaceSchema } from "../schema/document";
 import { StylePropsSchema } from "../schema/style";
 import { TokenOverridesSchema } from "../schema/tokens";
@@ -58,13 +58,19 @@ export const OP_SCHEMAS = {
       labels: z.array(z.string()).optional(),
       /** Merged into the component's own style; `null` clears it. */
       style: StylePropsSchema.nullable().optional(),
+      /**
+       * Style for the component's parts (`header`, `label`, `title-2`…), each merged into
+       * what the part has; a part set to `null` loses its own style, `styles: null` clears them all.
+       */
+      styles: z.record(z.string(), StylePropsSchema.nullable()).nullable().optional(),
     })
     .strict(),
   /**
    * Change parts of a component's content without rewriting the rest. Paths are dotted,
    * relative to `content`, with numbers for list positions: `paragraphs.1`, `rows.2.0`,
-   * `items.0.text`. `set` replaces (an index one past the end appends); `remove` deletes
-   * (array items are taken out, so later indexes shift). Removals run after the sets.
+   * `items.0.text`, `blocks.4`. `set` replaces (an index one past the end appends); `insert`
+   * puts a list of new items before a position; `remove` deletes. Every path is a position
+   * in the content as sent: inserts and removals never shift each other's positions.
    */
   edit: z
     .object({
@@ -72,9 +78,11 @@ export const OP_SCHEMAS = {
       component: Ref,
       set: z.record(z.string().min(1), z.unknown()).optional(),
       remove: z.array(z.string().min(1)).optional(),
+      /** New items before a position (`{"blocks.3": [...]}`; the list's length appends). */
+      insert: z.record(z.string().min(1), z.array(z.unknown()).min(1)).optional(),
     })
     .strict()
-    .refine((o) => o.set !== undefined || o.remove !== undefined, { message: "give set and/or remove" }),
+    .refine((o) => o.set !== undefined || o.remove !== undefined || o.insert !== undefined, { message: "give set, insert and/or remove" }),
   /**
    * Replace text in every piece of text content (paragraphs, titles, cells, items, runs…).
    * Limit it with `components`. Case-sensitive unless `matchCase: false`. Finding nothing
@@ -113,6 +121,27 @@ export const OP_SCHEMAS = {
     })
     .strict(),
   /**
+   * Stack existing components in columns, in the order given: each list becomes one column
+   * across guide columns (`cols`, split by `widths` like `row`), starting at the same y
+   * (from `below`, `end` or `page` + `y`), each component right below the one before it.
+   * One list stacks components in one column (a new order, a new width). The y of every
+   * component is worked out by the layout, so nothing is computed by hand; what the columns
+   * run into is pushed down as usual.
+   */
+  columns: z
+    .object({
+      op: z.literal("columns"),
+      columns: z.array(z.array(Ref).min(1)).min(1).max(4),
+      page: Int1.optional(),
+      y: Int0.optional(),
+      below: Ref.optional(),
+      end: z.literal(true).optional(),
+      gap: Int0.optional(),
+      cols: z.tuple([Int1, Int1]).optional(),
+      widths: z.array(z.number().positive()).optional(),
+    })
+    .strict(),
+  /**
    * Move a block before or after another component, like moving a section in a text:
    * what was below the block moves up into its place, and the target and what is below
    * it move down to make room. The block is `component`, or with `through` every
@@ -146,6 +175,14 @@ export const OP_SCHEMAS = {
     .object({ op: z.literal("setSurface"), surface: SurfaceSchema, primary: z.boolean().optional(), fitWidth: z.boolean().optional() })
     .strict(),
   removeSurface: z.object({ op: z.literal("removeSurface"), surface: Ref }).strict(),
+  /**
+   * Replace a paged surface's master (default: the first paged surface): components drawn on
+   * every page it applies to, behind the body, with fixed boxes {x, y, w, h} measured from
+   * the top of the margins. `reserve` takes rows from the body at the top and bottom.
+   * Text in them may use {page}, {pages}, {title} and {date}.
+   */
+  setMaster: z.object({ op: z.literal("setMaster"), surface: Ref.optional(), master: MasterSchema }).strict(),
+  removeMaster: z.object({ op: z.literal("removeMaster"), surface: Ref.optional() }).strict(),
   /**
    * Work on whole pages (slides), by declared position:
    * - `insert`: an empty page after `page` (0 = before the first); later pages move down one;

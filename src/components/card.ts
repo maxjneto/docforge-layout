@@ -22,11 +22,11 @@ export const cardComponent: ComponentDef<"card"> = {
     const style = ctx.style();
     const { eyebrow, title, value, text: body, footer } = component.content;
 
-    const parts: { block: TextBlock; align: "left" | "center" | "right" }[] = [];
+    const parts: { block: TextBlock; align: "left" | "center" | "right"; part?: string }[] = [];
     const add = (inline: Parameters<typeof layoutInline>[0] | undefined, variant?: string) => {
       if (inline === undefined || inline === "") return;
       const s = ctx.style(variant);
-      parts.push({ block: layoutInline(inline, s, ctx, ctx.width, diagnostics), align: s.align });
+      parts.push({ block: layoutInline(inline, s, ctx, ctx.width, diagnostics), align: s.align, part: variant });
     };
     add(eyebrow, "eyebrow");
     add(title, "title");
@@ -49,7 +49,7 @@ export const cardComponent: ComponentDef<"card"> = {
             let html = "";
             parts.forEach((p, i) => {
               if (i > 0) top += style.gap;
-              html += renderTextBlock(p.block, { x, y: top, width: ctx.width, align: p.align });
+              html += renderTextBlock(p.block, { x, y: top, width: ctx.width, align: p.align, part: p.part });
               top += p.block.height;
             });
             return html;

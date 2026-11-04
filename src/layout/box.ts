@@ -5,6 +5,8 @@ import type { Prepared } from "./types";
 export interface BoxOptions {
   /** 0 for the first (or only) piece of a component. */
   piece: number;
+  /** Repeated decoration (a page master): hidden from assistive technology, no anchor. */
+  decorative?: boolean;
 }
 
 /**
@@ -26,8 +28,11 @@ export function renderBox(p: Prepared, x: number, y: number, w: number, hgt: num
     cy += chunk.height;
   }
 
-  const semantic = options.piece === 0 && def.semantic ? def.semantic(p.component as never, { locale: p.ctx.locale }) : "";
-  const hasSemantic = !!def.semantic && (options.piece > 0 || semantic !== "");
+  const semantic =
+    options.piece === 0 && def.semantic && !options.decorative
+      ? def.semantic(p.component as never, { locale: p.ctx.locale, late: p.ctx.late, outline: p.ctx.outline })
+      : "";
+  const hasSemantic = (!!def.semantic && (options.piece > 0 || semantic !== "")) || !!options.decorative;
   const layers =
     (semantic ? h("div", { class: "dfl-sr" }, semantic) : "") + (hasSemantic ? h("div", { "aria-hidden": "true" }, visual) : visual);
 
@@ -42,7 +47,7 @@ export function renderBox(p: Prepared, x: number, y: number, w: number, hgt: num
     "div",
     {
       class: "dfl-box",
-      id: options.piece === 0 ? anchorId(p.component.id) : null,
+      id: options.piece === 0 && !options.decorative ? anchorId(p.component.id) : null,
       "data-component": p.component.id,
       "data-type": p.component.type,
       style: absStyle(x, y, w, hgt, {

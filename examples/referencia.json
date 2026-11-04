@@ -1,0 +1,96 @@
+{
+  "format": "docforge/layout",
+  "version": 4,
+  "meta": { "title": "API de Cobranças — referência", "locale": "pt-BR", "date": "2026-11-03" },
+  "surfaces": [
+    {
+      "id": "a4",
+      "kind": "page",
+      "size": "A4",
+      "margin": 48,
+      "master": {
+        "pages": "except-first",
+        "reserve": { "top": 5, "bottom": 5 },
+        "components": [
+          { "id": "m-titulo", "type": "text", "at": { "x": 0, "y": 0, "w": 60, "h": 3 }, "content": { "paragraphs": ["{title}"] } },
+          { "id": "m-data", "type": "text", "at": { "x": 60, "y": 0, "w": 27, "h": 3 }, "style": { "align": "right" }, "content": { "paragraphs": ["{date}"] } },
+          { "id": "m-linha", "type": "divider", "at": { "x": 0, "y": 3, "w": 87, "h": 1 } },
+          { "id": "m-pagina", "type": "text", "at": { "x": 0, "y": 125, "w": 87, "h": 3 }, "style": { "align": "right" }, "content": { "paragraphs": ["{page} de {pages}"] } }
+        ]
+      }
+    }
+  ],
+  "components": [
+    {
+      "id": "capa",
+      "type": "cover",
+      "at": { "page": 1, "x": 0, "y": 0, "w": 87, "h": 128 },
+      "content": {
+        "eyebrow": "Documentação técnica",
+        "title": "API de Cobranças",
+        "subtitle": "Referência dos recursos, campos e códigos de erro da versão 3",
+        "meta": [
+          { "label": "Versão", "value": "3.2 — novembro de 2026" },
+          { "label": "Público", "value": "Times de integração e parceiros" }
+        ]
+      },
+      "props": { "background": "$color.primary", "fullBleed": true, "vertical": "bottom" }
+    },
+    { "id": "sumario", "type": "toc", "at": { "page": 2, "x": 0, "y": 0, "w": 87 } },
+    {
+      "id": "corpo",
+      "type": "flow",
+      "at": { "page": 3, "x": 0, "y": 0, "w": 87 },
+      "content": {
+        "blocks": [
+          "# Visão geral",
+          "A API de Cobranças cria, consulta e cancela cobranças em nome de uma conta. Todas as rotas falam JSON, exigem o cabeçalho `Authorization` e respondem em até **2 segundos** no percentil 99.",
+          { "type": "callout", "content": { "title": "Ambiente de testes", "text": "Use `sandbox.cobrancas.exemplo.com` enquanto a integração não estiver homologada: nenhuma cobrança feita lá chega a um cliente." }, "props": { "kind": "tip" } },
+          { "type": "tags", "content": { "items": ["REST", "JSON", "OAuth 2.0", { "text": "Estável", "color": "$color.success" }, { "text": "v3", "color": "$color.primary" }] } },
+          "## Recursos",
+          "Cada recurso tem um identificador estável, gerado pela API, e um identificador externo opcional que o seu sistema escolhe.",
+          {
+            "type": "table",
+            "content": {
+              "columns": ["Campo", "Tipo", "Obrigatório", "Descrição"],
+              "rows": [
+                ["identificador_externo", "string", "não", "Chave que o seu sistema usa para reconhecer a cobrança nas sincronizações e nos webhooks."],
+                ["valor_centavos", "inteiro", "sim", "Valor em centavos de real, sempre positivo."],
+                ["vencimento", "data", "sim", "Data limite de pagamento no formato AAAA-MM-DD."],
+                ["descricao", "string", "não", "Texto que aparece na fatura do cliente (até 140 caracteres)."],
+                ["metodo_pagamento", "enum", "sim", "`pix`, `boleto` ou `cartao`."],
+                ["parcelas", "inteiro", "não", "De 1 a 12, só para cartão."],
+                ["notificar_cliente", "booleano", "não", "Envia o e-mail de cobrança quando verdadeiro."]
+              ]
+            },
+            "props": { "zebra": true }
+          },
+          "## Volume e desempenho",
+          "O volume de chamadas cresceu em todos os trimestres do ano, puxado pela migração dos parceiros para o Pix.",
+          { "type": "chart", "h": 26, "content": { "kind": "bar", "categories": ["Pix", "Boleto", "Cartão de crédito", "Cartão de débito"], "series": [{ "name": "Milhões de chamadas", "values": [42, 18, 25, 9] }] }, "props": { "orientation": "horizontal", "values": true, "unit": " mi" } },
+          { "type": "progress", "content": { "items": [{ "label": "Disponibilidade", "value": 99.95, "max": 100, "text": "99,95%" }, { "label": "Cobertura de testes", "value": 87 }, { "label": "Migração para v3", "value": 64 }] } },
+          { "type": "break" },
+          "# Códigos de erro",
+          "Erros seguem o formato `{ codigo, mensagem, detalhes }`. O código é estável; a mensagem pode mudar.",
+          {
+            "type": "table",
+            "content": {
+              "columns": ["Código", "HTTP", "Quando acontece"],
+              "rows": [
+                ["valor_invalido", "422", "O valor é zero, negativo ou passa do limite da conta."],
+                ["vencimento_passado", "422", "A data de vencimento é anterior a hoje."],
+                ["metodo_indisponivel", "409", "A conta não tem o método de pagamento habilitado."],
+                ["cobranca_inexistente", "404", "Nenhuma cobrança com esse identificador nesta conta."],
+                ["limite_de_requisicoes", "429", "Mais de 100 requisições por segundo; tente de novo após o tempo em `Retry-After`."]
+              ],
+              "footer": [{ "text": "5 códigos documentados", "span": 3 }]
+            }
+          },
+          { "type": "callout", "content": { "text": "Nunca repita uma requisição de criação sem a chave de idempotência: a segunda chamada cria uma segunda cobrança." }, "props": { "kind": "warning" } },
+          "## Distribuição dos erros",
+          { "type": "chart", "h": 24, "content": { "kind": "donut", "categories": ["422", "409", "404", "429"], "series": [{ "name": "Erros", "values": [61, 12, 19, 8] }] }, "props": { "legendPosition": "right", "center": "100%" } }
+        ]
+      }
+    }
+  ]
+}

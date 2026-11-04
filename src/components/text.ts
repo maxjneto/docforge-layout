@@ -1,9 +1,16 @@
 import type { TextRole } from "../schema/content";
 import { inlineHtml } from "../render/semantic";
-import { h } from "../render/html";
+import { absStyle, anchorId, h } from "../render/html";
+import { inlineText } from "../text/inline";
 import type { Diagnostic } from "../validate/diagnostics";
 import { excerpt, layoutInline, lineChunks, rect, sumHeights } from "./shared";
 import type { Chunk, ComponentDef } from "./types";
+
+/** Roles that are headings, with their outline level. */
+export const HEADING_LEVEL: Partial<Record<TextRole, number>> = { display: 1, "title-1": 1, "title-2": 2, "title-3": 3 };
+
+/** Id of the heading made by paragraph `index` of a text (its anchor and its mark). */
+export const headingId = (componentId: string, index: number) => `${componentId}--h${index}`;
 
 const QUOTE_BAR = 3;
 const QUOTE_INDENT = 14;
@@ -12,7 +19,7 @@ export const textComponent: ComponentDef<"text"> = {
   type: "text",
   sizing: "content",
   decorated: true,
-  variants: ["title-1", "title-2", "title-3", "subtitle", "body", "quote", "caption"],
+  variants: ["display", "title-1", "title-2", "title-3", "subtitle", "body", "quote", "caption"],
 
   layout(component, ctx) {
     const diagnostics: Diagnostic[] = [];
@@ -31,15 +38,27 @@ export const textComponent: ComponentDef<"text"> = {
       const block = layoutInline(inline, style, ctx, width, diagnostics);
       roles.push(role);
       lines += block.lines.length;
-      chunks.push(
-        ...lineChunks(block, {
+      const paragraphChunks = lineChunks(block, {
           x: quote ? QUOTE_INDENT : 0,
           width,
           align: style.align,
           topGap: index === 0 ? 0 : gap,
-          decorate: quote ? (x, y, hgt) => rect(x, y, QUOTE_BAR, hgt, { background: style.accent }) : undefined,
-        }),
-      );
+          decorate: quote ? (x, y, hgt) => rect(x, y, QUOTE_BAR, hgt, { background: style.accent }, role) : undefined,
+          part: role,
+        });
+      // A title is a heading: a mark the table of contents finds, and an anchor its link goes to.
+      const level = HEADING_LEVEL[role];
+      if (level !== undefined) paragraphChunks.forEach((c, i) => (paragraphChunks[i] = { ...c, keepWithNext: true }));
+      const first = paragraphChunks[0];
+      if (level !== undefined && first) {
+        const id = headingId(component.id, index);
+        paragraphChunks[0] = {
+          ...first,
+          marks: [{ id, kind: "heading", level, text: inlineText(inline) }],
+          html: (x, y) => h("span", { id: anchorId(id), style: absStyle(x, y, 0, 0) }, "") + first.html(x, y),
+        };
+      }
+      chunks.push(...paragraphChunks);
     });
 
     const needed = sumHeights(chunks);

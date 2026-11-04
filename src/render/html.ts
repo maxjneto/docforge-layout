@@ -16,9 +16,9 @@ export function fontStyle(style: TextStyle, face: { family: string; weight: numb
   };
 }
 
-/** A plain absolutely positioned rectangle (rules, bars, swatches, badges). */
-export function rect(x: number, y: number, w: number, hgt: number, extra: Style): string {
-  return h("div", { style: absStyle(x, y, w, hgt, extra) });
+/** A plain absolutely positioned rectangle (rules, bars, swatches, badges). `part` names the component part it belongs to. */
+export function rect(x: number, y: number, w: number, hgt: number, extra: Style, part?: string): string {
+  return h("div", { ...(part ? { "data-part": part } : {}), style: absStyle(x, y, w, hgt, extra) });
 }
 
 /**
@@ -26,12 +26,14 @@ export function rect(x: number, y: number, w: number, hgt: number, extra: Style)
  * non-wrapping line per measured line. `data-w` carries the measured width so the
  * conformance check can compare it with what the browser draws. Visual links are
  * kept out of the tab order; the accessible copy lives in the semantic layer.
+ * `part` names the component part the lines belong to (`data-part`), so an editor
+ * can find a table's header or a card's title in the drawing.
  */
 export function renderTextBlock(
   block: TextBlock,
-  options: { x: number; y: number; width: number; align: "left" | "center" | "right"; firstLine?: number; lastLine?: number },
+  options: { x: number; y: number; width: number; align: "left" | "center" | "right"; firstLine?: number; lastLine?: number; part?: string },
 ): string {
-  const { x, width, align } = options;
+  const { x, width, align, part } = options;
   const first = options.firstLine ?? 0;
   const last = options.lastLine ?? block.lines.length;
   let y = options.y;
@@ -53,6 +55,7 @@ export function renderTextBlock(
       {
         class: "dfl-line",
         "data-w": Math.round(line.width * 100) / 100,
+        ...(part ? { "data-part": part } : {}),
         style: absStyle(x, y, width, line.height, { lineHeight: px(line.height), whiteSpace: "pre", textAlign: align }),
       },
       spans,

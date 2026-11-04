@@ -12,12 +12,15 @@ export const stepsComponent: ComponentDef<"steps"> = {
   type: "steps",
   sizing: "content",
   decorated: true,
-  variants: ["title"],
+  variants: ["title", "number"],
 
   layout(component, ctx) {
     const diagnostics: Diagnostic[] = [];
     const style = ctx.style();
     const titleStyle = ctx.style("title");
+    // The badge: the `number` part's color, on its background or else the block's accent.
+    const numberStyle = ctx.style("number");
+    const badgeBackground = numberStyle.background ?? style.accent;
     const badge = Math.round(style.fontSize * 1.7);
     const x = badge + BADGE_GAP;
     const width = ctx.width - x;
@@ -39,14 +42,15 @@ export const stepsComponent: ComponentDef<"steps"> = {
           let html = "";
           if (index > 0) html += rect(mid - 1, cy, 2, gap, { background: style.borderColor });
           if (!last) html += rect(mid - 1, top + badge, 2, height - gap - badge, { background: style.borderColor });
-          html += rect(cx, top, badge, badge, { background: style.accent, borderRadius: "50%" });
+          html += rect(cx, top, badge, badge, { background: badgeBackground, borderRadius: "50%" }, "number");
           html += h(
             "div",
             {
+              "data-part": "number",
               style: absStyle(cx, top, badge, badge, {
                 lineHeight: px(badge),
                 textAlign: "center",
-                color: "#ffffff",
+                color: numberStyle.color,
                 fontFamily: cssFamilyValue(badgeFace.family),
                 fontWeight: String(badgeFace.weight),
                 fontSize: Math.round(style.fontSize * 0.85),
@@ -54,7 +58,7 @@ export const stepsComponent: ComponentDef<"steps"> = {
             },
             text(String(index + 1)),
           );
-          html += renderTextBlock(title, { x: cx + x, y: top, width, align: titleStyle.align });
+          html += renderTextBlock(title, { x: cx + x, y: top, width, align: titleStyle.align, part: "title" });
           if (body) html += renderTextBlock(body, { x: cx + x, y: top + title.height + TITLE_TEXT_GAP, width, align: style.align });
           return html;
         },

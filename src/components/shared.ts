@@ -4,7 +4,7 @@ import { renderTextBlock, rect } from "../render/html";
 
 export { rect };
 import { inlineText, inlineToRuns } from "../text/inline";
-import { layoutText, styleRuns, type BaseTextStyle, type TextBlock } from "../text/layout";
+import { intrinsicWidths, layoutText, styleRuns, type BaseTextStyle, type TextBlock } from "../text/layout";
 import { diag, type Diagnostic } from "../validate/diagnostics";
 import type { Chunk, ComponentContext } from "./types";
 
@@ -56,10 +56,17 @@ export function layoutInline(
   return block;
 }
 
+/** Widest word and unwrapped width of inline content, in px (no diagnostics: layout reports them). */
+export function inlineWidths(inline: Inline, style: ResolvedStyle, ctx: ComponentContext): { min: number; max: number } {
+  const base = baseText(style);
+  const runs = styleRuns(inlineToRuns(inline), base, { ...ctx.runStyle, onLink: undefined, onUnknownSize: undefined });
+  return intrinsicWidths(runs, { base, registry: ctx.registry });
+}
+
 /** One chunk per line, so the text can split across pages between any two lines. */
 export function lineChunks(
   block: TextBlock,
-  options: { x?: number; width: number; align: "left" | "center" | "right"; topGap?: number; decorate?: (x: number, y: number, h: number) => string },
+  options: { x?: number; width: number; align: "left" | "center" | "right"; topGap?: number; decorate?: (x: number, y: number, h: number) => string; part?: string },
 ): Chunk[] {
   return block.lines.map((line, index) => {
     const gap = index === 0 ? (options.topGap ?? 0) : 0;
@@ -74,6 +81,7 @@ export function lineChunks(
           align: options.align,
           firstLine: index,
           lastLine: index + 1,
+          part: options.part,
         }),
     };
   });

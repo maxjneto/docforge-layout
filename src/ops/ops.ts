@@ -3,7 +3,11 @@ import type { Component } from "../schema/components";
 import { defaultGrid, type LayoutDocument } from "../schema/document";
 import type { Placement } from "../schema/placement";
 import type { StyleProps } from "../schema/style";
-import type { TokenOverrides } from "../schema/tokens";
+import { defaultTokens, type TokenOverrides } from "../schema/tokens";
+import { DARK_SURFACE, luminance, mix, parseColor } from "../style/color";
+import { colsOf, rowsOf } from "../layout/surface";
+import type { Master } from "../schema/components";
+import type { Surface } from "../schema/document";
 import { diag, type Diagnostic } from "../validate/diagnostics";
 import { editContent, replaceInContent } from "./content";
 import { compactDocument, DEFAULT_FIT_STRATEGIES, DEFAULT_MIN_SCALE, fitDocument, fitNote, fitTarget } from "./fit";
@@ -80,7 +84,8 @@ function resolveAt(doc: LayoutDocument, at: AtInput, current: Placement | null, 
   }
 
   if (x === undefined) x = 0;
-  if (w === undefined) return "give w (or cols, or below) for a new component.";
+  // No width: as wide as the page allows from x.
+  if (w === undefined) w = Math.max(1, laid().units.cols - x);
   if (y === undefined) return "give y (or below, or end) for a new component.";
 
   // Keep stored positions inside a page: y past the bottom goes to the next page.
@@ -158,6 +163,101 @@ function placeRow(doc: LayoutDocument, op: RowOp, ctx: OpsContext): string[] | s
     if (tallest > 0) for (const c of doc.components) if (ids.includes(c.id) && c.at) c.at = { ...c.at, h: tallest };
   }
   return ids;
+}
+
+/**
+ * A dark page color with the light defaults still on the colors drawn on top of it (code,
+ * KPI and table-header backgrounds, borders, muted text) leaves light text on light boxes.
+ * Derive those from the page and text colors, unless the document set them. Returns the
+ * keys it set.
+ */
+function deriveDarkTheme(doc: LayoutDocument): string[] {
+  const colors = (doc.tokens?.color ?? {}) as Record<string, string>;
+  const surface = parseColor(colors.surface);
+  const text = parseColor(colors.text ?? defaultTokens.color.text);
+  if (!surface || !text || luminance(surface) >= DARK_SURFACE || luminance(text) < 0.4) return [];
+  const derived: Record<string, string> = { subtle: mix(surface, text, 0.1), border: mix(surface, text, 0.22), muted: mix(surface, text, 0.62) };
+  const set = Object.keys(derived).filter((key) => colors[key] === undefined);
+  for (const key of set) colors[key] = derived[key] as string;
+  if (set.length) (doc.tokens as TokenOverrides).color = colors;
+  return set;
+}
+
+type ColumnsOp = Extract<Op, { op: "columns" }>;
+
+/** Stack components in columns (see the `columns` op). Returns the ids it placed, or a message. */
+function placeColumns(doc: LayoutDocument, op: ColumnsOp, ctx: OpsContext): string[] | string {
+  const ids = op.columns.flat();
+  if (new Set(ids).size !== ids.length) return "a component appears twice in the columns.";
+  const missing = ids.filter((id) => !doc.components.some((c) => c.id === id));
+  if (missing.length) return `Component(s) ${missing.map((id) => `"${id}"`).join(", ")} do not exist.`;
+  if (op.below !== undefined && ids.includes(op.below)) return `"${op.below}" is in the columns; start them below something else.`;
+  if (op.widths && op.widths.length !== op.columns.length) return `widths has ${op.widths.length} values for ${op.columns.length} columns.`;
+
+  const guides = ctx.layout(doc).guides;
+  const [first, last] = op.cols ?? [1, guides.length];
+  if (!guides.find((g) => g.col === first) || !guides.find((g) => g.col === last) || last < first) {
+    return `cols [${first}, ${last}] must be guide columns 1–${guides.length}, first ≤ last.`;
+  }
+  const span = last - first + 1;
+  if (span < op.columns.length) return `${op.columns.length} columns do not fit in ${span} guide column${span === 1 ? "" : "s"}; widen cols.`;
+  const counts = splitColumns(span, op.widths ?? op.columns.map(() => 1));
+
+  const anchor = resolveAt(doc, { page: op.page, y: op.y, below: op.below, end: op.end, gap: op.gap, cols: [first, first] }, null, ctx, ids[0] as string);
+  if (typeof anchor === "string") return anchor;
+
+  // Take every listed component off the page first, so none of them runs into its own old place.
+  const parked = new Map<string, Placement>();
+  for (const c of doc.components) {
+    if (ids.includes(c.id) && c.at) {
+      parked.set(c.id, c.at);
+      delete c.at;
+    }
+  }
+  let col = first;
+  for (const [i, list] of op.columns.entries()) {
+    const a = guides.find((g) => g.col === col) as { x: number };
+    const endCol = col + (counts[i] as number) - 1;
+    const b = guides.find((g) => g.col === endCol) as { x: number; w: number };
+    col = endCol + 1;
+    const x = a.x;
+    const w = b.x + b.w - a.x;
+    let previous: string | null = null;
+    for (const id of list) {
+      const c = doc.components.find((k) => k.id === id) as Component;
+      const h = parked.get(id)?.h;
+      const at = previous === null
+        ? { page: anchor.page, x, y: anchor.y, w, ...(h !== undefined ? { h } : {}) }
+        : resolveAt(doc, { below: previous, x, w, gap: op.gap }, { page: anchor.page, x, y: anchor.y, w, ...(h !== undefined ? { h } : {}) }, ctx, id);
+      if (typeof at === "string") return at;
+      c.at = at;
+      previous = id;
+    }
+  }
+  return ids;
+}
+
+/**
+ * A master kept across a new page size: what sits in its bottom reserve moves with the
+ * bottom of the page, and what ran to the right edge still does. Returns the ids it moved.
+ */
+function followPageSize(master: Master, before: Surface, after: Surface, unit: number): string[] {
+  const rows0 = rowsOf(before, unit);
+  const rows1 = rowsOf(after, unit);
+  const cols0 = colsOf(before, unit);
+  const cols1 = colsOf(after, unit);
+  const bottom = master.reserve?.bottom ?? 0;
+  const moved: string[] = [];
+  for (const c of master.components) {
+    const at = { ...c.at };
+    if (Number.isFinite(rows0) && Number.isFinite(rows1) && rows1 !== rows0 && at.y >= rows0 - bottom) at.y = Math.max(0, at.y + rows1 - rows0);
+    if (cols1 !== cols0 && at.x + at.w === cols0) at.w = Math.max(1, cols1 - at.x);
+    if (at.y !== c.at.y || at.w !== c.at.w) {
+      c.at = at;
+      moved.push(c.id);
+    }
+  }
+  return moved;
 }
 
 type PageOp = Extract<Op, { op: "page" }>;
@@ -274,6 +374,13 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
   const touched: string[] = [];
   const notes: Diagnostic[] = [];
   const component = (id: string) => doc.components.find((c) => c.id === id);
+  const masterComponents = () => doc.surfaces.flatMap((s) => (s.kind === "page" ? (s.master?.components ?? []) : [])) as unknown as Component[];
+  /** Body or master: what `update`, `edit` and `replaceText` may change. */
+  const editable = (id: string) => component(id) ?? masterComponents().find((c) => c.id === id);
+  const notFound = (id: string) =>
+    masterComponents().some((c) => c.id === id)
+      ? `"${id}" is in the page master, which has no free position: change it with setMaster, update or edit.`
+      : `Component "${id}" does not exist.`;
 
   ops.forEach((raw, index) => {
     const parsed = parseOp(raw);
@@ -302,7 +409,7 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
       case "place": {
         const c = component(op.component);
         if (!c) {
-          errors.push(opError(`Component "${op.component}" does not exist.`, { component: op.component }));
+          errors.push(opError(notFound(op.component), { component: op.component }));
           break;
         }
         const at = resolveAt(doc, op.at, c.at ?? null, ctx, c.id);
@@ -315,7 +422,7 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         break;
       }
       case "update": {
-        const c = component(op.component) as (Component & { props?: Record<string, unknown>; style?: StyleProps }) | undefined;
+        const c = editable(op.component) as (Component & { props?: Record<string, unknown>; style?: StyleProps }) | undefined;
         if (!c) {
           errors.push(opError(`Component "${op.component}" does not exist.`, { component: op.component }));
           break;
@@ -326,6 +433,17 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         if (op.labels !== undefined) c.labels = [...op.labels];
         if (op.style === null) delete c.style;
         else if (op.style !== undefined) c.style = { ...(c.style ?? {}), ...op.style };
+        const parts = c as { styles?: Record<string, StyleProps> };
+        if (op.styles === null) delete parts.styles;
+        else if (op.styles !== undefined) {
+          const next: Record<string, StyleProps> = { ...(parts.styles ?? {}) };
+          for (const [part, style] of Object.entries(op.styles)) {
+            if (style === null) delete next[part];
+            else next[part] = { ...(next[part] ?? {}), ...style };
+          }
+          if (Object.keys(next).length) parts.styles = next;
+          else delete parts.styles;
+        }
         touched.push(c.id);
         break;
       }
@@ -338,13 +456,22 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         touched.push(...placed);
         break;
       }
+      case "columns": {
+        const placed = placeColumns(doc, op, ctx);
+        if (typeof placed === "string") {
+          errors.push(opError(placed));
+          break;
+        }
+        touched.push(...placed);
+        break;
+      }
       case "edit": {
-        const c = component(op.component) as (Component & { content?: unknown }) | undefined;
+        const c = editable(op.component) as (Component & { content?: unknown }) | undefined;
         if (!c) {
           errors.push(opError(`Component "${op.component}" does not exist.`, { component: op.component }));
           break;
         }
-        const next = editContent(c.content, op.set, op.remove);
+        const next = editContent(c.content, op.set, op.remove, op.insert);
         if ("error" in next) {
           errors.push(opError(next.error, { component: c.id }));
           break;
@@ -354,7 +481,7 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         break;
       }
       case "replaceText": {
-        const unknown = (op.components ?? []).filter((id) => !component(id));
+        const unknown = (op.components ?? []).filter((id) => !editable(id));
         if (unknown.length) {
           errors.push(opError(`Component(s) ${unknown.map((id) => `"${id}"`).join(", ")} do not exist.`));
           break;
@@ -362,7 +489,7 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         const scope = op.components ? new Set(op.components) : null;
         const hits: string[] = [];
         let total = 0;
-        for (const c of doc.components as (Component & { content?: unknown })[]) {
+        for (const c of [...doc.components, ...masterComponents()] as (Component & { content?: unknown })[]) {
           if (scope && !scope.has(c.id)) continue;
           if (c.content === undefined) continue;
           const { content, count } = replaceInContent(c.content, op.find, op.replace, op.matchCase ?? true);
@@ -389,9 +516,10 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         touched.push(...moved.block, ...moved.followed);
         const where = op.before !== undefined ? `before ${op.before}` : `after ${op.after}`;
         const rest = moved.followed.length ? `; ${moved.followed.length} other component(s) followed (${moved.followed.join(", ")})` : "";
+        const flow = moved.flow ? " It crossed a page break, so it moved in the reading flow: empty rows at the bottom of a page moved with it; end with fit to close them." : "";
         notes.push(
-          diag("info", "move-result", `Moved ${moved.block.join(", ")} ${where} (${moved.rows} rows)${rest}.`, {
-            data: { block: moved.block, followed: moved.followed, rows: moved.rows },
+          diag("info", "move-result", `Moved ${moved.block.join(", ")} ${where} (${moved.rows} rows)${rest}.${flow}`, {
+            data: { block: moved.block, followed: moved.followed, rows: moved.rows, flow: moved.flow },
           }),
         );
         break;
@@ -435,6 +563,14 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
           const key = group as keyof TokenOverrides;
           doc.tokens[key] = { ...(doc.tokens[key] ?? {}), ...(values as object) } as never;
         }
+        const derived = deriveDarkTheme(doc);
+        if (derived.length) {
+          notes.push(
+            diag("info", "theme-derived", `The page color is dark and ${derived.join(", ")} were still the light defaults: derived them from the page and text colors so boxes and code stay readable. Set them in setTokens to choose your own.`, {
+              data: { derived: Object.fromEntries(derived.map((k) => [k, (doc.tokens?.color as Record<string, string>)[k]])) },
+            }),
+          );
+        }
         break;
       }
       case "setGrid": {
@@ -443,10 +579,36 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         doc.grid = { ...(doc.grid ?? {}), ...op.grid };
         break;
       }
+      case "setMaster":
+      case "removeMaster": {
+        const target = op.surface === undefined ? doc.surfaces.find((s) => s.kind === "page") : doc.surfaces.find((s) => s.id === op.surface);
+        if (!target || target.kind !== "page") {
+          errors.push(opError(op.surface === undefined ? "The document has no paged surface to hold a master." : `"${op.surface}" is not a paged surface.`));
+          break;
+        }
+        if (op.op === "removeMaster") {
+          delete target.master;
+          break;
+        }
+        const clash = op.master.components.map((c) => c.id).filter((id) => component(id));
+        if (clash.length) {
+          errors.push(opError(`Master component id(s) ${clash.map((id) => `"${id}"`).join(", ")} are already used in the body.`));
+          break;
+        }
+        target.master = structuredClone(op.master);
+        touched.push(...op.master.components.map((c) => c.id));
+        break;
+      }
       case "setSurface": {
         const colsBefore = op.fitWidth ? ctx.layout(doc).units.cols : 0;
         const existing = doc.surfaces.findIndex((s) => s.id === op.surface.id);
         const surface = structuredClone(op.surface);
+        // A new size keeps the master unless the op sends one.
+        const old = existing === -1 ? undefined : doc.surfaces[existing];
+        if (surface.kind === "page" && old?.kind === "page" && old.master && surface.master === undefined) {
+          surface.master = structuredClone(old.master);
+          touched.push(...followPageSize(surface.master, old, surface, doc.grid?.unit ?? defaultGrid.unit));
+        }
         if (existing === -1) doc.surfaces.push(surface);
         else doc.surfaces[existing] = surface;
         if (op.primary) doc.surfaces = [surface, ...doc.surfaces.filter((s) => s !== surface)];

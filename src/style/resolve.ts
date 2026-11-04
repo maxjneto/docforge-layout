@@ -39,12 +39,14 @@ export interface CascadeInput {
   labelStyles: Record<string, StyleProps>;
   componentLabels: string[];
   componentStyle?: StyleProps;
+  /** The component's own style for each of its parts (`styles` on the component). */
+  componentStyles?: Record<string, StyleProps>;
 }
 
 /**
  * The layers that apply to `type` (and optionally a `variant` of it), lowest first:
- * preset → document → region → label → component. Within the preset and document
- * layers the type comes before its variant.
+ * preset → document → region → label → component → component[variant]. Within the
+ * preset and document layers the type comes before its variant.
  */
 export function cascadeLayers(input: CascadeInput, type: string, variant?: string): StyleLayer[] {
   const selectors = variant ? [type, `${type}.${variant}`] : [type];
@@ -65,6 +67,8 @@ export function cascadeLayers(input: CascadeInput, type: string, variant?: strin
     if (l) layers.push({ origin: `label:${label}`, props: l });
   }
   if (input.componentStyle) layers.push({ origin: "component", props: input.componentStyle });
+  const part = variant ? input.componentStyles?.[variant] : undefined;
+  if (part) layers.push({ origin: `component[${variant}]`, props: part });
   return layers;
 }
 
