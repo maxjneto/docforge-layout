@@ -21,17 +21,25 @@ An agent never has to look at the page. It reads a text map of the document, ask
 
 | Type | Size decided by | Notes |
 | --- | --- | --- |
-| `text` | content | Paragraphs with a role (`title-1..3`, `subtitle`, `body`, `quote`, `caption`) and inline `**bold**`, `*italic*`, `` `code` ``, `[link](url)` or explicit runs (color, highlight, size from the scale) |
+| `flow` | content | Blocks of any other type read top to bottom: strings are paragraphs (`# `, `## `, `### `, `> ` make titles and quotes), `{ "type": "break" }` starts a page. Splits across pages, repeats table headers, keeps titles with their text: long text without positions |
+| `text` | content | Paragraphs with a role (`display`, `title-1..3`, `subtitle`, `body`, `quote`, `caption`) and inline `**bold**`, `*italic*`, `` `code` ``, `[link](url)` or explicit runs (color, highlight, size from the scale) |
 | `list` | content | Bullet, number or check; nested items |
-| `table` | content | Weighted column widths, alignment, zebra, header repeated across pages |
+| `table` | content | Columns sized by content like a browser (no word cut; `table-too-narrow` names the width that fits) or by weights; footer row, cells spanning columns, bars behind a numeric column, zebra, header repeated across pages |
 | `code` | content | Keeps indentation; wide lines wrap and are reported |
 | `steps` | content | Numbered steps with title and text |
 | `timeline` | content | Dated events with title and text |
 | `card` | content | Eyebrow, title, optional large value, text and footer, boxed by default; never splits |
-| `kpi` | area | Card look by default; value shrinks to fit (down to 18px), centered in its area |
-| `chart` | area | Bar, line or pie in SVG; reports a plot too small or labels that do not fit |
-| `image` | area | `contain` or `cover`; natural height keeps the aspect ratio |
+| `callout` | content | Note, tip, warning, important or success: colored bar, icon, optional title; never splits |
+| `tags` | content | Labels in rounded boxes that wrap into rows; text turns light or dark to read on the tag's color |
+| `progress` | content | One line per item: label, bar (or stars, or dots) and value |
+| `kpi` | area | Card look by default; value shrinks to fit (down to 18px), centered in its area; optional sparkline |
+| `chart` | area | Bar (vertical, horizontal, stacked), line, area, pie, donut and scatter in SVG; axis titles and range, legend below or on the right; reports a plot too small or labels that do not fit |
+| `image` | area | `contain` or `cover`; natural height keeps the aspect ratio; caption, "Figure N" numbered in reading order, link |
+| `cover` | area | Eyebrow, title, subtitle and label/value lines over a color or image; `fullBleed` paints to the page's edges |
+| `toc` | content | Table of contents of the titles in texts and flows, with page numbers filled in after placement and links |
 | `divider` | area | Line or space |
+
+A paged surface may have a **master**: components with fixed boxes drawn on every page (or every page but the first, or a list), behind the body, with `{page}`, `{pages}`, `{title}` and `{date}` in their text. `reserve` takes rows from the body at the top and bottom of every page.
 
 ## Links
 
@@ -116,7 +124,7 @@ A link only ever serves what its owner **published**: later edits stay private u
 
 ### Format versions
 
-Documents carry a format `version` (now 4: `styles` per part on a component; 3 added the `Slide` page size). It goes up whenever the schema accepts something an older library would refuse, and each release that raises it adds the conversion one step down.
+Documents carry a format `version` (now 4: `styles` per part, flows, the components above from `callout` on, page masters, tables sized by content; 3 added the `Slide` page size). Version 2 and 3 documents keep their even table columns when read. It goes up whenever the schema accepts something an older library would refuse, and each release that raises it adds the conversion one step down.
 
 - **Older document, newer library:** read as it is (2 → 3 changed only the number) or converted (`upgradeDocument` for version 1), with a `format_upgraded` warning.
 - **Newer document, older library:** refused with `format_unsupported`, naming the version to update to. When you load from DocForge this does not happen: every request says which format this library reads (`?format=4`), the server converts down with `downgradeDocument` and lists what the older format cannot say (a 16:9 slide written as a 1280×720 page, a theme font older libraries do not bundle), and the library logs it as `format_downgraded`.

@@ -42,22 +42,52 @@ export function guidesFor(contentWidth: number, grid: Grid): Guide[] {
   return guides;
 }
 
-function rowsOf(surface: Surface, unit: number): number {
+/** Whole units down one page inside the margins (Infinity for a continuous surface). */
+export function rowsOf(surface: Surface, unit: number): number {
   const size = surfaceSize(surface);
   if (size.height === null) return Number.POSITIVE_INFINITY;
   const m = margins(surface);
   return unitsIn(size.height - m.top - m.bottom, unit);
 }
 
+/** Rows a page master keeps for itself at the top and bottom of every page. */
+export function reserveOf(surface: Surface): { top: number; bottom: number } {
+  const r = surface.kind === "page" ? surface.master?.reserve : undefined;
+  return { top: r?.top ?? 0, bottom: r?.bottom ?? 0 };
+}
+
+/** Whether the surface's master is drawn on page `index` (0-based). */
+export function masterOn(surface: Surface, index: number): boolean {
+  const master = surface.kind === "page" ? surface.master : undefined;
+  if (!master || !master.components.length) return false;
+  const which = master.pages ?? "all";
+  return which === "all" ? true : which === "except-first" ? index > 0 : which.includes(index + 1);
+}
+
+/** Rows of a page left to the body once the master took its reserve. */
+function bodyRowsOf(surface: Surface, unit: number): number {
+  const rows = rowsOf(surface, unit);
+  if (!Number.isFinite(rows)) return rows;
+  const r = reserveOf(surface);
+  return Math.max(1, rows - r.top - r.bottom);
+}
+
+/** Whole units across the content area. */
+export function colsOf(surface: Surface, unit: number): number {
+  const m = margins(surface);
+  return unitsIn(surfaceSize(surface).width - m.left - m.right, unit);
+}
+
 export function frameFor(surface: Surface, grid: Grid, doc: LayoutDocument): Frame {
   const size = surfaceSize(surface);
   const margin = margins(surface);
   const contentWidth = size.width - margin.left - margin.right;
-  const contentHeight = size.height === null ? Number.POSITIVE_INFINITY : size.height - margin.top - margin.bottom;
-  const rows = rowsOf(surface, grid.unit);
+  const rows = bodyRowsOf(surface, grid.unit);
+  const reserve = reserveOf(surface);
+  const contentHeight = size.height === null ? Number.POSITIVE_INFINITY : rows * grid.unit;
   // A continuous surface stacks the declared pages of the first paged surface.
   const paged = doc.surfaces.find((s) => s.kind === "page");
-  const pageStride = Number.isFinite(rows) ? rows : paged ? rowsOf(paged, grid.unit) : Number.POSITIVE_INFINITY;
+  const pageStride = Number.isFinite(rows) ? rows : paged ? bodyRowsOf(paged, grid.unit) : Number.POSITIVE_INFINITY;
   return {
     surface,
     grid,
@@ -68,6 +98,8 @@ export function frameFor(surface: Surface, grid: Grid, doc: LayoutDocument): Fra
     contentHeight,
     cols: unitsIn(contentWidth, grid.unit),
     rows,
+    pageRows: rowsOf(surface, grid.unit),
+    bodyTop: Number.isFinite(rows) ? reserve.top * grid.unit : 0,
     pageStride,
     guides: guidesFor(contentWidth, grid),
   };

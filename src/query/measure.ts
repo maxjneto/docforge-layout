@@ -24,6 +24,8 @@ export interface Measurement {
   naturalRows: number;
   /** Pages it would take placed alone at the top of a page. */
   pages: number;
+  /** Narrowest w (units) that cuts no word, for components that know it (tables). */
+  minW?: number;
   facts: Record<string, unknown>;
   diagnostics: Diagnostic[];
 }
@@ -93,6 +95,7 @@ export function measureComponent(input: unknown, options: MeasureOptions, layout
       rows: Math.ceil(g.needed / unit - 1e-6),
       naturalRows: Math.ceil(g.natural / unit - 1e-6),
       pages: g.pages.length,
+      ...(typeof g.facts.minW === "number" ? { minW: g.facts.minW } : {}),
       facts: g.facts,
       diagnostics: result.diagnostics.filter((d) => d.component === component.id && d.severity !== "info"),
     });
@@ -104,6 +107,7 @@ export function measureComponent(input: unknown, options: MeasureOptions, layout
     const pages = m.pages > 1 ? ` · splits across ${m.pages} pages` : "";
     const facts = Object.keys(m.facts).length ? ` · ${JSON.stringify(m.facts)}` : "";
     lines.push(`  ${m.label} (w ${m.w}, ${m.widthPx}px): needs ${m.neededPx}px = ${m.rows} rows${natural}${pages}${facts}`);
+    if (m.minW !== undefined) lines.push(`    ${m.minW <= m.w ? "every word whole" : "words cut"}: needs w ≥ ${m.minW}${m.facts.columnWidths === "fixed" ? ' with columnWidths "auto"' : ""}`);
     for (const d of m.diagnostics) lines.push(`    ${d.severity === "error" ? "!" : "~"} ${d.code}: ${d.message}`);
   }
   return { ok: true, measurements, diagnostics: [], text: lines.join("\n") };

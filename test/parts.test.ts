@@ -30,12 +30,12 @@ describe("style per part of a component", () => {
     const html = renderLayout(ok, registry).html;
     expect(html).toContain(`background:${defaultTokens.color.primary}`);
 
-    const odd = engine.layout(single({ ...table, styles: { footer: { color: "$color.danger" } } }));
+    const odd = engine.layout(single({ ...table, styles: { caption: { color: "$color.danger" } } }));
     expect(odd.ok).toBe(true);
     const warning = odd.diagnostics.find((d) => d.code === "unknown-part");
     expect(warning?.severity).toBe("warning");
-    expect(warning?.message).toContain('"footer"');
-    expect(warning?.suggestions?.[0]).toContain("header, zebra");
+    expect(warning?.message).toContain('"caption"');
+    expect(warning?.suggestions?.[0]).toContain("header, zebra, footer");
   });
 
   it("colors striped rows from the zebra part, and the steps badge from the number part", () => {

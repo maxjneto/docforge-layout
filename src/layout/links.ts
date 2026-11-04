@@ -9,8 +9,9 @@ import type { Link } from "./types";
  * links must point at a placed component.
  */
 export function checkLinks(links: Link[], structure: Structure, out: Diagnostic[]): void {
-  const targets = new Set(structure.components.keys());
+  const targets = new Set([...structure.components.keys(), ...structure.blocks.keys()]);
   const placed = new Set(structure.placed.map((c) => c.id));
+  for (const [block, flow] of structure.blocks) if (placed.has(flow)) placed.add(block);
   for (const link of links) {
     if (!isSafeHref(link.href)) {
       out.push(

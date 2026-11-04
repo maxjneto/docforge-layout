@@ -1,4 +1,9 @@
-import { defOf, type ComponentContext } from "../components";
+import { defOf, type ComponentContext, type Late, type OutlineEntry } from "../components";
+import { flowItems } from "../components/flow";
+import { HEADING_LEVEL, headingId } from "../components/text";
+import { inlineText } from "../text/inline";
+import type { Component } from "../schema/components";
+import type { ComponentType } from "../schema/components";
 import type { LayoutDocument, Region } from "../schema/document";
 import type { Placement } from "../schema/placement";
 import type { ResolvedStyle } from "../schema/style";
@@ -42,6 +47,30 @@ export interface MeasureInput {
   locale: string;
 }
 
+/** Headings of every text (and every text inside a flow), in declared reading order. */
+export function outlineOf(placed: Component[]): OutlineEntry[] {
+  const entries: OutlineEntry[] = [];
+  const fromText = (c: Component, page: number) => {
+    if (c.type !== "text") return;
+    const fallback = c.props?.role ?? "body";
+    c.content.paragraphs.forEach((p, i) => {
+      const role = typeof p === "string" ? fallback : (p.role ?? fallback);
+      const level = HEADING_LEVEL[role];
+      if (level === undefined) return;
+      entries.push({ id: headingId(c.id, i), role, level, text: inlineText(typeof p === "string" ? p : p.text), page });
+    });
+  };
+  const ordered = placed
+    .map((c, order) => ({ c, order, at: c.at as Placement }))
+    .sort((a, b) => a.at.page - b.at.page || a.at.y - b.at.y || a.at.x - b.at.x || a.order - b.order);
+  for (const { c, at } of ordered) {
+    if (c.type === "flow") {
+      for (const item of flowItems(c.id, c.content.blocks)) if (!("break" in item)) fromText(item.component, at.page);
+    } else fromText(c, at.page);
+  }
+  return entries;
+}
+
 /** Regions apply to components whose declared top-left corner falls inside them. */
 function regionsFor(regions: Region[], at: Placement): Region[] {
   return regions.filter(
@@ -69,6 +98,8 @@ export function measureComponents(input: MeasureInput, out: Diagnostic[]): { pre
     linkColor: colorValue("$color.primary", tokens, "#1f4fd8"),
   };
   const reportedFonts = new Set<string>();
+  const late: Late = { figures: new Map(), pages: new Map(), headings: [], pageCount: 1 };
+  const outline = outlineOf(structure.placed);
   const links: Link[] = [];
   const prepared: Prepared[] = [];
 
@@ -109,26 +140,34 @@ export function measureComponents(input: MeasureInput, out: Diagnostic[]): { pre
         }),
       );
     }
-    // One resolution per (component, variant): issues are reported once, origins reused by the map.
-    const resolved = new Map<string, ResolvedResult>();
-    const resolve = (variant?: string): ResolvedResult => {
-      const key = variant ?? "";
-      const cached = resolved.get(key);
-      if (cached) return cached;
-      const result = resolveStyle(cascade, component.type, variant);
-      for (const issue of result.issues) out.push(issueToDiagnostic(issue, component.id));
-      const family = result.style.fontFamily;
-      if (!registry.hasFamily(family) && !reportedFonts.has(family)) {
-        reportedFonts.add(family);
-        out.push(
-          diag("warning", "unknown-font", `Font family "${family}" is not registered; "${registry.families()[0] ?? "?"}" is used instead.`, {
-            component: component.id,
-            suggestions: [`Use one of: ${registry.families().join(", ")}.`],
-          }),
-        );
-      }
-      resolved.set(key, result);
-      return result;
+    // One resolution per (type, variant): issues are reported once, origins reused by the map.
+    const resolverFor = (type: ComponentType, layers: CascadeInput) => {
+      const resolved = new Map<string, ResolvedResult>();
+      return (variant?: string): ResolvedResult => {
+        const key = variant ?? "";
+        const cached = resolved.get(key);
+        if (cached) return cached;
+        const result = resolveStyle(layers, type, variant);
+        for (const issue of result.issues) out.push(issueToDiagnostic(issue, component.id));
+        const family = result.style.fontFamily;
+        if (!registry.hasFamily(family) && !reportedFonts.has(family)) {
+          reportedFonts.add(family);
+          out.push(
+            diag("warning", "unknown-font", `Font family "${family}" is not registered; "${registry.families()[0] ?? "?"}" is used instead.`, {
+              component: component.id,
+              suggestions: [`Use one of: ${registry.families().join(", ")}.`],
+            }),
+          );
+        }
+        resolved.set(key, result);
+        return result;
+      };
+    };
+    const resolve = resolverFor(component.type, cascade);
+    // Blocks inside a flow: the flow's regions and classes, then the block's own style.
+    const styleFor: ComponentContext["styleFor"] = (type, own) => {
+      const r = resolverFor(type, { ...cascade, componentStyle: own.style, componentStyles: own.styles });
+      return (variant) => r(variant).style;
     };
     const styleOf = (variant?: string): ResolvedStyle => resolve(variant).style;
 
@@ -140,10 +179,15 @@ export function measureComponents(input: MeasureInput, out: Diagnostic[]): { pre
       registry,
       tokens,
       style: styleOf,
+      styleFor,
       runStyle: { ...runStyle, onLink: (href: string) => links.push({ component: component.id, href }) },
       width: Math.max(1, areaWidth - inset * 2),
       height: null,
       locale,
+      unit,
+      inset,
+      late,
+      outline,
     };
     const laid = def.layout(component as never, ctx);
     const boxHref = (component as { props?: { href?: string } }).props?.href;

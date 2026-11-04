@@ -2,6 +2,7 @@ import { DocumentSchema, defaultGrid, type Grid } from "../schema/document";
 import { mergeTokens } from "../schema/tokens";
 import { dedupe, diag, sortDiagnostics, type Diagnostic } from "../validate/diagnostics";
 import { checkLinks } from "./links";
+import { checkBodyPlaceholders, drawMaster } from "./master";
 import { measureComponents } from "./measure";
 import { placeComponents } from "./place";
 import { checkStructure } from "./structure";
@@ -55,6 +56,8 @@ export function layoutDocument(input: unknown, options: LayoutOptions): LayoutRe
   const frame = frameFor(surface, grid, doc);
   const { prepared, links } = measureComponents({ doc, structure, frame, tokens, registry: options.registry, locale }, diagnostics);
   const { pages, components } = placeComponents(prepared, frame, diagnostics);
+  drawMaster({ doc, structure, frame, tokens, registry: options.registry, locale }, pages, diagnostics);
+  checkBodyPlaceholders(structure.placed, diagnostics);
   checkLinks(links, structure, diagnostics);
 
   return {

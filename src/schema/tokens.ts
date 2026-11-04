@@ -43,6 +43,8 @@ export const defaultTokens: Tokens = {
     chart4: "#9334e6",
     chart5: "#d01884",
     chart6: "#12a4af",
+    /** Header and footer text of a page master (follows muted unless a theme sets it). */
+    pageChrome: "#5b6168",
   },
   font: {
     sans: "Inter",
@@ -86,5 +88,6 @@ export function mergeTokens(overrides: TokenOverrides | undefined): Tokens {
     const values = overrides[group];
     if (values) Object.assign(merged[group], values);
   }
+  if (overrides.color?.muted !== undefined && overrides.color.pageChrome === undefined) merged.color.pageChrome = overrides.color.muted;
   return merged;
 }

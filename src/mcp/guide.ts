@@ -81,6 +81,8 @@ is 89 units wide and 130 tall; the map's first lines give the exact numbers.
 {"op": "place", "component": "k1", "at": {"x": 45, "w": 44}}
 {"op": "update", "component": "k1", "content": {...}, "props": {...} | null, "labels": [...], "style": {...} | null}
 {"op": "edit", "component": "body", "set": {"paragraphs.1": "New text", "rows.2.0": "Sul"}, "remove": ["items.3"]}
+{"op": "edit", "component": "doc", "insert": {"blocks.4": ["## New section", "Its first paragraph."]}}
+{"op": "setMaster", "master": {"pages": "except-first", "reserve": {"bottom": 4}, "components": [{"id": "n", "type": "text", "at": {"x": 0, "y": 126, "w": 89, "h": 3}, "style": {"align": "right"}, "content": {"paragraphs": ["{page} / {pages}"]}}]}}
 {"op": "replaceText", "find": "T2", "replace": "Q2", "components": ["body"], "matchCase": false}
 {"op": "row", "below": "title", "h": 14, "items": [{"id": "k1", "type": "kpi", "content": {...}}, {"id": "k2", ...}, "existing-id"]}
 {"op": "row", "below": "k1", "widths": [2, 1], "align": "top", "items": ["text-a", "chart-a"]}
@@ -100,7 +102,9 @@ is 89 units wide and 130 tall; the map's first lines give the exact numbers.
 \`\`\`
 
 - \`update\` replaces \`content\` whole; \`edit\` changes parts of it by path (\`paragraphs.1\`, \`rows.2.0\`,
-  \`items.0.text\`; one past the end appends), so you never resend a whole table to fix a cell.
+  \`items.0.text\`, \`blocks.3\`; one past the end appends), so you never resend a whole table to fix a cell.
+  \`insert\` puts new items before a position; every path means the content as you last saw it.
+- \`add\` without \`w\` (and without \`cols\`) runs to the right margin.
   \`replaceText\` changes words everywhere (or in \`components\`); finding nothing is an error.
 - Writes and previews answer with a **summary**: what you changed (before → after), what moved on
   its own, problems, free rows per page. Ask \`map: "pages"\` (with \`pages\`) or \`map: "full"\` for the
@@ -136,18 +140,60 @@ Text anywhere accepts inline **bold**, *italic*, \`code\` and [link](https://…
 \`\`\`json
 {"type": "text", "content": {"paragraphs": [{"role": "title-1", "text": "Q3"}, "A plain body paragraph."]}}
 {"type": "list", "content": {"items": ["One", {"text": "Two", "items": ["Nested"]}]}, "props": {"marker": "bullet"}}
-{"type": "table", "content": {"columns": ["Area", {"header": "Lines", "align": "right"}], "rows": [["frontend", "20 323"]]}}
+{"type": "table", "content": {"columns": ["Area", {"header": "Lines", "align": "right"}], "rows": [["frontend", "20 323"], [{"text": "All areas", "span": 2}]], "footer": ["Total", "20 323"]}, "props": {"bars": "Lines"}}
 {"type": "steps", "content": {"steps": [{"title": "Get a key", "text": "In Settings → API."}]}}
 {"type": "timeline", "content": {"events": [{"date": "15/10", "title": "Fixed", "text": "Build in 110 s."}]}}
 {"type": "kpi", "content": {"value": "28", "label": "Commits", "delta": "+27%", "trend": "up"}}
 {"type": "card", "content": {"eyebrow": "Why", "title": "One document", "text": "People and agents edit the same file."}}
-{"type": "chart", "content": {"kind": "bar", "categories": ["Aug", "Oct"], "series": [{"name": "Commits", "values": [22, 28]}]}}
+{"type": "chart", "content": {"kind": "bar", "categories": ["Aug", "Oct"], "series": [{"name": "Commits", "values": [22, 28]}]}, "props": {"orientation": "horizontal", "stacked": false, "axis": {"y": "Commits"}}}
+{"type": "chart", "content": {"kind": "scatter", "series": [{"name": "Clients", "points": [[3, 40], [5, 52]]}]}}
+{"type": "callout", "content": {"title": "Note", "text": "Inline **markdown**."}, "props": {"kind": "warning"}}
+{"type": "tags", "content": {"items": ["Python", {"text": "Live", "color": "$color.success"}]}}
+{"type": "progress", "content": {"items": [{"label": "TypeScript", "value": 4, "max": 5}]}, "props": {"kind": "stars"}}
+{"type": "image", "content": {"src": "https://…", "alt": "Flow", "width": 1200, "height": 800, "caption": "Approval flow"}, "props": {"figure": true}}
 {"type": "code", "content": {"code": "npm i @docforge-lib/layout", "language": "sh"}}
 {"type": "divider"}
 \`\`\`
 
-Paragraph roles: title-1, title-2, title-3, subtitle, body, quote, caption. \`image\` takes
-\`{src, alt, width, height}\`.
+Paragraph roles: display (one big sentence on a slide), title-1, title-2, title-3, subtitle, body,
+quote, caption. Chart kinds: bar, line, area, pie, donut, scatter; \`stacked\` (bar, area),
+\`legendPosition: "right"\`, \`colors\`, \`axis: {x, y, min, max}\`. A KPI takes \`sparkline: [numbers]\`.
+Callout kinds: note, tip, warning, important, success. Progress kinds: bar, stars, dots.
+
+**Tables size their columns by content** (like a browser): every column gets at least its longest
+word, so words are not cut. If the table is too narrow even for that, \`table-too-narrow\` says the
+\`w\` that fits; \`measure_component\` reports it too ("every word whole: needs w ≥ N"). Giving any
+column a \`width\` weight switches the table to fixed proportions (\`props.columnWidths: "fixed"\`).
+`,
+  flow: `## Long text: flow
+
+For prose, reference tables and anything that reads top to bottom, use **one \`flow\`** instead of
+many positioned components. You write blocks in order; the flow stacks them, splits across pages
+(repeating table headers), keeps titles with their text, and you never compute a y inside it.
+
+\`\`\`json
+{"op": "add", "component": {"id": "doc", "type": "flow", "content": {"blocks": ["# Overview", "A paragraph with **bold**.", {"type": "table", "content": {"columns": ["Field", "Description"], "rows": [["id", "Key"]]}}, {"type": "callout", "content": {"text": "Careful."}, "props": {"kind": "warning"}}, {"type": "break"}, {"id": "annex", "type": "text", "content": {"paragraphs": [{"role": "title-1", "text": "Annex"}]}}]}}, "at": {"page": 2, "y": 0}}
+\`\`\`
+
+- Each string is a paragraph; \`# \`, \`## \`, \`### \` and \`> \` at its start make titles and quotes.
+- A block is any component type without \`at\` (an \`id\` makes it a link target, \`h\` sizes a chart or
+  image); \`{"type": "break"}\` starts a new page.
+- Change it with \`edit\`: \`set\` \`blocks.3\`, \`insert\` before \`blocks.5\`, \`remove\` \`blocks.2\`.
+- Keep the grid for what is visual (a cover, KPIs side by side, a slide); put the reading part in a flow.
+`,
+  pages: `## Page master, cover, contents
+
+- **Master** (\`setMaster\`): header, footer, page numbers and logos on every page (\`pages: "all"\`,
+  \`"except-first"\` or a list). Its components have fixed boxes \`{x, y, w, h}\` from the top of the
+  margins, no page. \`reserve: {top, bottom}\` takes rows from the body on every page, so the body's
+  y 0 starts below the top reserve and a page has fewer rows (the map's first lines say how many).
+  Text there may use \`{page}\`, \`{pages}\`, \`{title}\` (meta.title) and \`{date}\` (meta.date or today).
+- **Cover**: \`{"type": "cover", "content": {"eyebrow", "title", "subtitle", "meta": [{"label", "value"}]},
+  "props": {"background": "$color.primary", "fullBleed": true, "vertical": "bottom"}}\` at \`y: 0\` with \`h\`
+  = the page's rows. On a page the master skips it also takes the master's reserve, so it fills the
+  page; \`fullBleed\` paints to the page's edges. Pair it with a master on \`"except-first"\`.
+- **Contents**: \`{"type": "toc"}\` lists the title-1/title-2 paragraphs after its page (in texts and
+  flows) with their page numbers and links; \`props.levels\` and \`props.from\` choose which.
 `,
   styles: `## Styles
 
@@ -170,7 +216,7 @@ export const AGENT_GUIDE = Object.values(SECTIONS).join("\n");
  */
 export const GUIDE_TOPICS = {
   build: AGENT_GUIDE,
-  change: [SECTIONS.intro, SECTIONS.change, SECTIONS.operations, SECTIONS.components].join("\n"),
+  change: [SECTIONS.intro, SECTIONS.change, SECTIONS.operations, SECTIONS.components, SECTIONS.flow].join("\n"),
 } as const;
 
 export type GuideTopic = keyof typeof GUIDE_TOPICS;

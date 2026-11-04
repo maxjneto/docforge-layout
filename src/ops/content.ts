@@ -29,8 +29,17 @@ function parentOf(root: Record<string, Json>, segments: (string | number)[], pat
   return { parent: node, key: segments[segments.length - 1] as string | number };
 }
 
-/** Apply `set` then `remove` to a copy of the content. Returns the new content or a message. */
-export function editContent(content: Json, set: Record<string, Json> = {}, remove: string[] = []): { content: Json } | { error: string } {
+/**
+ * Apply `set`, then `insert` and `remove`, to a copy of the content. Every path means a
+ * position in the content as it was sent, so changes that shift a list run from its end.
+ * Returns the new content or a message.
+ */
+export function editContent(
+  content: Json,
+  set: Record<string, Json> = {},
+  remove: string[] = [],
+  insert: Record<string, Json[]> = {},
+): { content: Json } | { error: string } {
   const root: Record<string, Json> = isObject(content) ? structuredClone(content) : {};
   for (const [path, value] of Object.entries(set)) {
     const segments = parsePath(path);
@@ -49,15 +58,23 @@ export function editContent(content: Json, set: Record<string, Json> = {}, remov
       return { error: `"${path}": cannot set inside a ${typeof parent}.` };
     }
   }
-  // Remove deepest/last first, so earlier removals do not shift later paths of the same list.
-  const ordered = [...remove].sort((a, b) => b.localeCompare(a, "en", { numeric: true }));
-  for (const path of ordered) {
+  // Deepest/last first, so a change never shifts the positions of the ones still to run;
+  // at the same position the removal runs first (remove 3 + insert at 3 replaces it).
+  const changes = [
+    ...remove.map((path) => ({ path, items: null as Json[] | null })),
+    ...Object.entries(insert).map(([path, items]) => ({ path, items })),
+  ].sort((a, b) => b.path.localeCompare(a.path, "en", { numeric: true }) || (a.items ? 1 : 0) - (b.items ? 1 : 0));
+  for (const { path, items } of changes) {
     const segments = parsePath(path);
     if (!segments) return { error: `"${path}" is not a valid path (use dots: items.3).` };
     const found = parentOf(root, segments, path);
     if (typeof found === "string") return { error: found };
     const { parent, key } = found;
-    if (Array.isArray(parent) && typeof key === "number" && key < parent.length) parent.splice(key, 1);
+    if (items) {
+      if (!Array.isArray(parent) || typeof key !== "number") return { error: `"${path}": insert needs a position in a list (blocks.3, rows.0).` };
+      if (key > parent.length) return { error: `"${path}": position ${key} is past the end (the list has ${parent.length}).` };
+      parent.splice(key, 0, ...structuredClone(items));
+    } else if (Array.isArray(parent) && typeof key === "number" && key < parent.length) parent.splice(key, 1);
     else if (isObject(parent) && typeof key === "string" && key in parent) delete parent[key];
     else return { error: `"${path}": nothing to remove there.` };
   }
@@ -65,7 +82,8 @@ export function editContent(content: Json, set: Record<string, Json> = {}, remov
 }
 
 /** Keys whose strings are not visible text (urls, enums, colors…). */
-const NOT_TEXT = new Set(["src", "kind", "trend", "role", "align", "language", "link", "href", "color", "highlight", "size", "marker", "fit"]);
+const NOT_TEXT = new Set(["src", "kind", "trend", "role", "align", "language", "link", "href", "color", "highlight", "size", "marker", "fit", "type", "id"]);
+const NOT_TEXT_TREE = new Set(["props", "style", "styles"]);
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -84,7 +102,8 @@ export function replaceInContent(content: Json, find: string, replace: string, m
       });
     }
     if (Array.isArray(node)) return node.map((item) => walk(item, null));
-    if (isObject(node)) return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, walk(v, k)]));
+    // Inside a flow, blocks carry their own type, id, props and style: not text.
+    if (isObject(node)) return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, NOT_TEXT_TREE.has(k) ? v : walk(v, k)]));
     return node;
   };
   return { content: walk(content, null), count };

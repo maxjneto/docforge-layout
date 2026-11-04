@@ -270,3 +270,20 @@ export function layoutText(
     brokenWords,
   };
 }
+
+/**
+ * How wide text wants to be: `min` is its widest word (any narrower and a word is cut),
+ * `max` its longest line when nothing wraps. A table sizes its columns from these.
+ */
+export function intrinsicWidths(runs: StyledRun[], options: { base: BaseTextStyle; registry: FontRegistry }): { min: number; max: number } {
+  const { registry } = options;
+  const widthOf = (parts: Part[]) =>
+    parts.reduce((sum, part) => {
+      const style = runs[part.run] as StyledRun;
+      return sum + registry.measure(registry.match(style.family, style.weight, style.italic), style.size, part.text);
+    }, 0);
+  let min = 0;
+  for (const token of tokenize(runs)) if (token.kind === "word") min = Math.max(min, widthOf(token.parts));
+  const unbroken = layoutText(runs, { maxWidth: Number.MAX_SAFE_INTEGER, lineHeight: 1, base: options.base, registry });
+  return { min, max: Math.max(min, unbroken.width) };
+}

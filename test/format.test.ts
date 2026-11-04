@@ -109,7 +109,12 @@ describe("downgradeDocument", () => {
   });
 
   it("loses nothing on a plain document, and round-trips", () => {
-    const plain = example("relatorio");
+    // Tables sized by content (the default from 4) cannot be said in 3; even columns can.
+    const report = example("relatorio") as { components: { type: string; props?: object }[] };
+    const plain = {
+      ...report,
+      components: report.components.map((c) => (c.type === "table" ? { ...c, props: { ...c.props, columnWidths: "fixed" } } : c)),
+    };
     const r = downgradeDocument(plain, 2);
     expect(r.ok).toBe(true);
     expect(r.notes).toEqual([]);

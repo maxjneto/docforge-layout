@@ -17,6 +17,8 @@ export interface Box {
   html: string;
   /** Present when the component was split across pages: 0-based piece index. */
   piece?: number;
+  /** Not the body: `master` (header, footer…, fixed) or `bleed` (a background to the page's edges). */
+  layer?: "master" | "bleed";
 }
 
 /** One alignment guide column, in units from the left edge of the content area. */
@@ -111,8 +113,12 @@ export interface Frame {
   contentHeight: number;
   /** Whole units across the content area. */
   cols: number;
-  /** Whole units down one page; `Infinity` for continuous surfaces. */
+  /** Whole units of body down one page (the master's reserve taken out); `Infinity` for continuous surfaces. */
   rows: number;
+  /** Whole units down one page inside the margins, the master's reserve included. */
+  pageRows: number;
+  /** px from the top margin to where the body starts (the master's top reserve). */
+  bodyTop: number;
   /** Rows per declared page, used to stack pages on a continuous surface (`rows` on a paged one). */
   pageStride: number;
   guides: Guide[];

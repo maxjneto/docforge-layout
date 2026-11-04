@@ -60,6 +60,7 @@ function gridOverlay(result: LayoutResult, page: PageLayout): string {
     GRID_PAGE,
   );
   for (const box of page.boxes) {
+    if (box.layer) continue;
     const geo = result.components[box.component];
     const piece = geo ? (geo.pieces[box.piece ?? 0] ?? geo.box) : null;
     const moved = !!geo && geo.shifted > 0 && (box.piece ?? 0) === 0;

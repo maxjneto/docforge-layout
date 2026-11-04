@@ -98,7 +98,7 @@ const TOOLS = [
   {
     name: "measure_component",
     description:
-      "How tall components would be at given widths, without placing them. Writes already report every size, so use this only to choose between widths, with all candidates in one call (components). With path, measured with that document's styles.",
+      "How tall components would be at given widths, without placing them. For a table it also says the narrowest w that keeps every word whole (and each column's minimum). Writes already report every size, so use this only to choose between widths, with all candidates in one call (components). With path, measured with that document's styles.",
     inputSchema: obj(
       {
         component: { type: "object", description: "{id, type, content, props?, style?, labels?}" },

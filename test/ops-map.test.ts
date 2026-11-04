@@ -145,11 +145,17 @@ describe("operations", () => {
     expect((base as { components: unknown[] }).components).toHaveLength(1);
   });
 
+  it("gives a component added without w the rest of the page's width", () => {
+    const r = engine.apply(base, [{ op: "add", component: kpi("x"), at: { page: 1, x: 10, y: 40 } }]);
+    expect(r.ok).toBe(true);
+    const cols = engine.layout(base).units.cols;
+    expect(r.doc?.components.find((c) => c.id === "x")?.at).toMatchObject({ x: 10, w: cols - 10 });
+  });
+
   it("checks each op's shape and position rules, naming the problem instead of throwing", () => {
     const cases: [unknown, RegExp][] = [
       [{ op: "teleport" }, /"op" must be one of add, place/],
       [{ op: "add", component: { id: "x", type: "text", content: { paragraphs: ["x"] } } }, /op 1 \(add\): invalid fields — at:/],
-      [{ op: "add", component: kpi("x"), at: { x: 0, y: 0 } }, /give w \(or cols, or below\)/],
       [{ op: "add", component: kpi("x"), at: { x: 0, w: 4 } }, /give y \(or below, or end\)/],
       [{ op: "place", component: "t", at: { x: -1 } }, /at\.x/],
       [{ op: "place", component: "t", at: { cols: [1, 3], x: 2 } }, /cols or x\/w/],
