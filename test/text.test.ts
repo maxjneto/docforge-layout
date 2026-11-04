@@ -69,6 +69,13 @@ describe("layoutText", () => {
     expect(lines.some((l) => l.includes("bbbbcccc"))).toBe(true);
   });
 
+  it("keeps a number's digit groups and no-break spaces on one line", () => {
+    for (const width of [90, 120, 160]) {
+      const lines = layout("linhas 12 895 e 1 234 567, prazo 10 dias", width).lines.map((l) => l.fragments.map((f) => f.text).join(""));
+      for (const n of ["12 895", "1 234 567", "10 dias"]) expect(lines.some((l) => l.includes(n)), `${n} at ${width}: ${JSON.stringify(lines)}`).toBe(true);
+    }
+  });
+
   it("honors hard breaks and keeps empty lines", () => {
     const block = layout("um\n\ndois", 500);
     expect(block.lines.map((l) => l.fragments.map((f) => f.text).join(""))).toEqual(["um", "", "dois"]);

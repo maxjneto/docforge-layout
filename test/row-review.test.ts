@@ -137,3 +137,47 @@ describe("compare and restore", () => {
     expect(back?.components.find((x) => x.id === "a")).toEqual((before.components as { id: string }[]).find((x) => x.id === "a"));
   });
 });
+
+describe("review: balance, contrast, numbering", () => {
+  const slides = [{ id: "s", kind: "page", size: "Slide", margin: 48 }];
+  const codes = (d: unknown) => engine.review(d).findings.map((f) => f.code);
+
+  it("flags a slide whose content sits in the top part, with a fix that centers it", () => {
+    const d = doc({ surfaces: slides, components: [{ id: "t", type: "text", content: { paragraphs: [lorem] }, at: at(0, 0, 80) }] });
+    const f = engine.review(d).findings.find((x) => x.code === "unbalanced-page");
+    expect(f?.page).toBe(1);
+    expect(f?.fixes[0]).toMatchObject({ op: "place", component: "t" });
+    // Applying the fix clears it.
+    const fixed = engine.apply(d, f?.fixes as never[]);
+    expect(codes(fixed.doc)).not.toContain("unbalanced-page");
+  });
+
+  it("flags light text on a light box (a dark theme that left $color.subtle light)", () => {
+    const d = doc({
+      components: [{ id: "c", type: "code", content: { code: "npm test" }, at: at(0, 0, 60) }],
+    }) as Record<string, unknown>;
+    d.tokens = { color: { text: "#e5e7eb" } };
+    const f = engine.review(d).findings.find((x) => x.code === "low-contrast");
+    expect(f?.components).toEqual(["c"]);
+    expect(f?.fixes[0]).toMatchObject({ op: "setTokens" });
+  });
+
+  it("setTokens with a dark page derives subtle, border and muted it would otherwise leave light", () => {
+    const d = doc({ components: [{ id: "c", type: "code", content: { code: "npm test" }, at: at(0, 0, 60) }] });
+    const r = engine.apply(d, [{ op: "setTokens", tokens: { color: { surface: "#0f172a", text: "#e5e7eb" } } }]);
+    const colors = (r.doc as { tokens: { color: Record<string, string> } }).tokens.color;
+    expect(Object.keys(colors).sort()).toEqual(["border", "muted", "subtle", "surface", "text"]);
+    expect(r.summary).toMatch(/derived them/);
+    expect(codes(r.doc)).not.toContain("low-contrast");
+    // A color the document chose is kept.
+    const kept = engine.apply(d, [{ op: "setTokens", tokens: { color: { surface: "#0f172a", text: "#e5e7eb", subtle: "#222222" } } }]);
+    expect((kept.doc as { tokens: { color: Record<string, string> } }).tokens.color.subtle).toBe("#222222");
+  });
+
+  it("flags numbers typed into numbered steps, with an edit that removes them", () => {
+    const d = doc({ components: [{ id: "st", type: "steps", content: { steps: [{ title: "1. Get a key" }, { title: "2) Configure" }, { title: "Ask" }] }, at: at(0, 0, 87) }] });
+    const f = engine.review(d).findings.find((x) => x.code === "double-numbering");
+    expect(f?.fixes[0]).toEqual({ op: "edit", component: "st", set: { "steps.0.title": "Get a key", "steps.1.title": "Configure" } });
+  });
+
+});

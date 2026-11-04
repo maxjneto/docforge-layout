@@ -31,6 +31,7 @@ export type DiagnosticCode =
   | "fit-failed"
   | "text-replaced"
   | "move-result"
+  | "theme-derived"
   | "unknown-link-target"
   | "unsafe-link";
 

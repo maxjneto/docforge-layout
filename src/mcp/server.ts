@@ -21,11 +21,14 @@ import type { CalibrateTarget } from "../query/calibrate";
 import { emptyDocument } from "../schema/document";
 import { upgradeDocument } from "../upgrade";
 import { LIB_VERSION } from "../version";
-import { AGENT_GUIDE } from "./guide";
+import { AGENT_GUIDE, GUIDE_TOPICS, type GuideTopic } from "./guide";
+import { outsideChanges } from "./outside";
 
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const GUIDE_URI = "docforge-layout://guide";
 const HISTORY_KEEP = 20;
+/** In the history folder: the document as this server last wrote it. Not a version (undo skips it). */
+const WRITTEN = "written.snapshot";
 
 type Json = Record<string, unknown>;
 interface Request {
@@ -54,8 +57,9 @@ const PAGES = { type: "array", items: { type: "integer", minimum: 1 }, descripti
 const TOOLS = [
   {
     name: "get_layout_guide",
-    description: "How layout documents work: positions, operations, every component's content, and how to build a page in few calls. The same text as the resource docforge-layout://guide.",
-    inputSchema: obj({}),
+    description:
+      "How layout documents work: positions, operations, every component's content, and how to build a page in few calls. The same text as the resource docforge-layout://guide. Changing a document that already exists? Ask for topic \"change\": the part you need, shorter.",
+    inputSchema: obj({ topic: { type: "string", enum: ["build", "change"], description: "build (default): everything. change: changing an existing document." } }),
   },
   {
     name: "create_layout_document",
@@ -66,7 +70,7 @@ const TOOLS = [
   {
     name: "get_layout_map",
     description:
-      "Read a layout document as text. Level 0: outline. Level 1: settings, each page drawn in ASCII (one character per unit) and a table of its components. Level 2: components in full, with style origins.",
+      "Read a layout document as text. Level 0: outline. Level 1: settings, each page drawn in ASCII (one character per unit) and a table of its components. Level 2: components in full, with style origins. Starts with what someone else changed since this server last wrote the file.",
     inputSchema: obj({ path: PATH, level: { type: "integer", enum: [0, 1, 2] }, pages: PAGES, components: { type: "array", items: { type: "string" } }, draw: { type: "boolean" } }, ["path"]),
   },
   {
@@ -189,11 +193,35 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
       mkdirSync(history, { recursive: true });
       lastStamp = Math.max(Date.now(), lastStamp + 1);
       copyFileSync(full, join(history, `${new Date(lastStamp).toISOString().replace(/[:.]/g, "-")}${tag ? `.${tag}` : ""}.json`));
-      const old = readdirSync(history).sort();
+      const old = readdirSync(history).filter((n) => n.endsWith(".json")).sort();
       for (const name of old.slice(0, Math.max(0, old.length - HISTORY_KEEP))) rmSync(join(history, name));
     }
     mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, `${JSON.stringify(doc, null, 2)}\n`);
+    mkdirSync(historyDir(full), { recursive: true });
+    writeFileSync(join(historyDir(full), WRITTEN), JSON.stringify(doc));
+  };
+  /** What changed in the file since this server last wrote it: a person, an editor or another tool. */
+  const othersChanged = (full: string, current: unknown): string => {
+    const snapshot = join(historyDir(full), WRITTEN);
+    if (!existsSync(snapshot)) return "";
+    let written: unknown;
+    try {
+      written = JSON.parse(readFileSync(snapshot, "utf8"));
+    } catch {
+      return "";
+    }
+    const lines = outsideChanges(written, current);
+    if (!lines.length) return "";
+    return [
+      "Changed by someone else since this server last wrote the file. Keep these changes unless the request is about them:",
+      ...lines.slice(0, 12).map((l) => `  ${l}`),
+      ...(lines.length > 12 ? [`  … and ${lines.length - 12} more`] : []),
+    ].join("\n");
+  };
+  const withOthers = (full: string, current: unknown, body: string) => {
+    const others = othersChanged(full, current);
+    return others ? `${others}\n\n${body}` : body;
   };
   const diagnosticsText = (list: { severity: string; code: string; message: string; component?: string; suggestions?: string[] }[]) =>
     list.length
@@ -211,8 +239,9 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
   };
 
   const tools: Record<string, (args: Json) => string> = {
-    get_layout_guide() {
-      return AGENT_GUIDE;
+    get_layout_guide(args) {
+      const topic = typeof args.topic === "string" && args.topic in GUIDE_TOPICS ? (args.topic as GuideTopic) : "build";
+      return GUIDE_TOPICS[topic];
     },
     create_layout_document(args) {
       const full = inRoot(args.path);
@@ -226,22 +255,28 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
     },
     get_layout_map(args) {
       const level = (args.level ?? 1) as 0 | 1 | 2;
-      return engine.map(read(args.path), {
+      const doc = read(args.path);
+      const map = engine.map(doc, {
         level,
         pages: pagesOf(args.pages),
         components: Array.isArray(args.components) ? (args.components as string[]) : undefined,
         draw: args.draw !== false,
       }).text;
+      return withOthers(inRoot(args.path), doc, map);
     },
     get_layout_document(args) {
-      return JSON.stringify(read(args.path), null, 2);
+      const doc = read(args.path);
+      return withOthers(inRoot(args.path), doc, JSON.stringify(doc, null, 2));
     },
     apply_layout_ops(args) {
       const full = inRoot(args.path);
       if (!Array.isArray(args.ops) || !args.ops.length) throw new ToolError("`ops` must be a non-empty array.");
-      const result = engine.apply(read(args.path), args.ops, { map: { pages: pagesOf(args.pages) } });
+      const current = read(args.path);
+      const others = othersChanged(full, current);
+      const result = engine.apply(current, args.ops, { map: { pages: pagesOf(args.pages) } });
       if (result.ok && result.doc) write(full, result.doc);
-      return writeReport(result.ok ? `Saved ${String(args.path)}.` : "NOT saved: the file is unchanged. Fix the errors and send the ops again.", result, args);
+      const report = writeReport(result.ok ? `Saved ${String(args.path)}.` : "NOT saved: the file is unchanged. Fix the errors and send the ops again.", result, args);
+      return others ? `${others}\n\n${report}` : report;
     },
     undo_layout_change(args) {
       const full = inRoot(args.path);
@@ -351,7 +386,7 @@ export function createMcpHandler(options: McpOptions): (message: unknown) => Pro
           protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
           capabilities: { tools: {}, resources: {} },
           serverInfo: { name: "docforge-layout", version: LIB_VERSION },
-          instructions: `Layout documents as local .docforge.json files under ${root}: components placed on a unit grid, measured without a browser. Read the guide (get_layout_guide, or ${GUIDE_URI}) before the first one. Build a page with one apply_layout_ops holding every component and read the summary it returns; it reports sizes and problems, so measure or preview only to choose between options. To change an existing document, send only what changes (edit, then fit to stay within N pages; move to reorder sections), never rebuild the layout.`,
+          instructions: `Layout documents as local .docforge.json files under ${root}: components placed on a unit grid, measured without a browser. Read the guide (get_layout_guide, or ${GUIDE_URI}) before the first one. Build page by page: one apply_layout_ops per page holding every component of it, and read the summary it returns; it reports sizes and problems, so measure or preview only to choose between options. To change an existing document (guide topic "change"), send only what changes (edit, then fit to stay within N pages; move to reorder sections; columns to put sections side by side), never rebuild the layout, and keep what someone else changed.`,
         });
       }
       case "ping":

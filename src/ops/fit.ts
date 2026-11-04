@@ -213,6 +213,7 @@ export function fitNote(outcome: FitOutcome, target: number, before: number, str
       data: { pages: outcome.pages, before, target, steps: outcome.steps },
       suggestions: [
         "Shorten or remove content (edit), or raise the page limit.",
+        'Put full-width sections side by side, which takes less height: {"op": "columns", "below": "id-above", "columns": [["a-title", "a"], ["b-title", "b"]]} (one list per column), then fit again.',
         ...(strategies.includes("spacing") && strategies.includes("type")
           ? ["Allow a smaller minScale."]
           : [`For a denser page, allow tighter spacing and smaller type: {"op": "fit", "pages": ${target}, "strategies": ["compact", "heights", "spacing", "type"]}.`]),

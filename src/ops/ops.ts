@@ -3,7 +3,8 @@ import type { Component } from "../schema/components";
 import { defaultGrid, type LayoutDocument } from "../schema/document";
 import type { Placement } from "../schema/placement";
 import type { StyleProps } from "../schema/style";
-import type { TokenOverrides } from "../schema/tokens";
+import { defaultTokens, type TokenOverrides } from "../schema/tokens";
+import { DARK_SURFACE, luminance, mix, parseColor } from "../style/color";
 import { diag, type Diagnostic } from "../validate/diagnostics";
 import { editContent, replaceInContent } from "./content";
 import { compactDocument, DEFAULT_FIT_STRATEGIES, DEFAULT_MIN_SCALE, fitDocument, fitNote, fitTarget } from "./fit";
@@ -156,6 +157,78 @@ function placeRow(doc: LayoutDocument, op: RowOp, ctx: OpsContext): string[] | s
     const laid = ctx.layout(doc);
     const tallest = Math.max(...ids.map((id) => laid.components[id]?.box.h ?? 0));
     if (tallest > 0) for (const c of doc.components) if (ids.includes(c.id) && c.at) c.at = { ...c.at, h: tallest };
+  }
+  return ids;
+}
+
+/**
+ * A dark page color with the light defaults still on the colors drawn on top of it (code,
+ * KPI and table-header backgrounds, borders, muted text) leaves light text on light boxes.
+ * Derive those from the page and text colors, unless the document set them. Returns the
+ * keys it set.
+ */
+function deriveDarkTheme(doc: LayoutDocument): string[] {
+  const colors = (doc.tokens?.color ?? {}) as Record<string, string>;
+  const surface = parseColor(colors.surface);
+  const text = parseColor(colors.text ?? defaultTokens.color.text);
+  if (!surface || !text || luminance(surface) >= DARK_SURFACE || luminance(text) < 0.4) return [];
+  const derived: Record<string, string> = { subtle: mix(surface, text, 0.1), border: mix(surface, text, 0.22), muted: mix(surface, text, 0.62) };
+  const set = Object.keys(derived).filter((key) => colors[key] === undefined);
+  for (const key of set) colors[key] = derived[key] as string;
+  if (set.length) (doc.tokens as TokenOverrides).color = colors;
+  return set;
+}
+
+type ColumnsOp = Extract<Op, { op: "columns" }>;
+
+/** Stack components in columns (see the `columns` op). Returns the ids it placed, or a message. */
+function placeColumns(doc: LayoutDocument, op: ColumnsOp, ctx: OpsContext): string[] | string {
+  const ids = op.columns.flat();
+  if (new Set(ids).size !== ids.length) return "a component appears twice in the columns.";
+  const missing = ids.filter((id) => !doc.components.some((c) => c.id === id));
+  if (missing.length) return `Component(s) ${missing.map((id) => `"${id}"`).join(", ")} do not exist.`;
+  if (op.below !== undefined && ids.includes(op.below)) return `"${op.below}" is in the columns; start them below something else.`;
+  if (op.widths && op.widths.length !== op.columns.length) return `widths has ${op.widths.length} values for ${op.columns.length} columns.`;
+
+  const guides = ctx.layout(doc).guides;
+  const [first, last] = op.cols ?? [1, guides.length];
+  if (!guides.find((g) => g.col === first) || !guides.find((g) => g.col === last) || last < first) {
+    return `cols [${first}, ${last}] must be guide columns 1–${guides.length}, first ≤ last.`;
+  }
+  const span = last - first + 1;
+  if (span < op.columns.length) return `${op.columns.length} columns do not fit in ${span} guide column${span === 1 ? "" : "s"}; widen cols.`;
+  const counts = splitColumns(span, op.widths ?? op.columns.map(() => 1));
+
+  const anchor = resolveAt(doc, { page: op.page, y: op.y, below: op.below, end: op.end, gap: op.gap, cols: [first, first] }, null, ctx, ids[0] as string);
+  if (typeof anchor === "string") return anchor;
+
+  // Take every listed component off the page first, so none of them runs into its own old place.
+  const parked = new Map<string, Placement>();
+  for (const c of doc.components) {
+    if (ids.includes(c.id) && c.at) {
+      parked.set(c.id, c.at);
+      delete c.at;
+    }
+  }
+  let col = first;
+  for (const [i, list] of op.columns.entries()) {
+    const a = guides.find((g) => g.col === col) as { x: number };
+    const endCol = col + (counts[i] as number) - 1;
+    const b = guides.find((g) => g.col === endCol) as { x: number; w: number };
+    col = endCol + 1;
+    const x = a.x;
+    const w = b.x + b.w - a.x;
+    let previous: string | null = null;
+    for (const id of list) {
+      const c = doc.components.find((k) => k.id === id) as Component;
+      const h = parked.get(id)?.h;
+      const at = previous === null
+        ? { page: anchor.page, x, y: anchor.y, w, ...(h !== undefined ? { h } : {}) }
+        : resolveAt(doc, { below: previous, x, w, gap: op.gap }, { page: anchor.page, x, y: anchor.y, w, ...(h !== undefined ? { h } : {}) }, ctx, id);
+      if (typeof at === "string") return at;
+      c.at = at;
+      previous = id;
+    }
   }
   return ids;
 }
@@ -349,6 +422,15 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         touched.push(...placed);
         break;
       }
+      case "columns": {
+        const placed = placeColumns(doc, op, ctx);
+        if (typeof placed === "string") {
+          errors.push(opError(placed));
+          break;
+        }
+        touched.push(...placed);
+        break;
+      }
       case "edit": {
         const c = component(op.component) as (Component & { content?: unknown }) | undefined;
         if (!c) {
@@ -400,9 +482,10 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         touched.push(...moved.block, ...moved.followed);
         const where = op.before !== undefined ? `before ${op.before}` : `after ${op.after}`;
         const rest = moved.followed.length ? `; ${moved.followed.length} other component(s) followed (${moved.followed.join(", ")})` : "";
+        const flow = moved.flow ? " It crossed a page break, so it moved in the reading flow: empty rows at the bottom of a page moved with it; end with fit to close them." : "";
         notes.push(
-          diag("info", "move-result", `Moved ${moved.block.join(", ")} ${where} (${moved.rows} rows)${rest}.`, {
-            data: { block: moved.block, followed: moved.followed, rows: moved.rows },
+          diag("info", "move-result", `Moved ${moved.block.join(", ")} ${where} (${moved.rows} rows)${rest}.${flow}`, {
+            data: { block: moved.block, followed: moved.followed, rows: moved.rows, flow: moved.flow },
           }),
         );
         break;
@@ -445,6 +528,14 @@ export function applyOps(input: LayoutDocument, ops: readonly unknown[], ctx: Op
         for (const [group, values] of Object.entries(op.tokens)) {
           const key = group as keyof TokenOverrides;
           doc.tokens[key] = { ...(doc.tokens[key] ?? {}), ...(values as object) } as never;
+        }
+        const derived = deriveDarkTheme(doc);
+        if (derived.length) {
+          notes.push(
+            diag("info", "theme-derived", `The page color is dark and ${derived.join(", ")} were still the light defaults: derived them from the page and text colors so boxes and code stay readable. Set them in setTokens to choose your own.`, {
+              data: { derived: Object.fromEntries(derived.map((k) => [k, (doc.tokens?.color as Record<string, string>)[k]])) },
+            }),
+          );
         }
         break;
       }

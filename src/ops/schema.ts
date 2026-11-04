@@ -118,6 +118,27 @@ export const OP_SCHEMAS = {
     })
     .strict(),
   /**
+   * Stack existing components in columns, in the order given: each list becomes one column
+   * across guide columns (`cols`, split by `widths` like `row`), starting at the same y
+   * (from `below`, `end` or `page` + `y`), each component right below the one before it.
+   * One list stacks components in one column (a new order, a new width). The y of every
+   * component is worked out by the layout, so nothing is computed by hand; what the columns
+   * run into is pushed down as usual.
+   */
+  columns: z
+    .object({
+      op: z.literal("columns"),
+      columns: z.array(z.array(Ref).min(1)).min(1).max(4),
+      page: Int1.optional(),
+      y: Int0.optional(),
+      below: Ref.optional(),
+      end: z.literal(true).optional(),
+      gap: Int0.optional(),
+      cols: z.tuple([Int1, Int1]).optional(),
+      widths: z.array(z.number().positive()).optional(),
+    })
+    .strict(),
+  /**
    * Move a block before or after another component, like moving a section in a text:
    * what was below the block moves up into its place, and the target and what is below
    * it move down to make room. The block is `component`, or with `through` every

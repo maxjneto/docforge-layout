@@ -213,6 +213,42 @@ describe("move", () => {
     expect(placed("a")).toMatchObject({ page: 1, y: 0 });
   });
 
+  it("moves a block that crosses a page break in the reading flow", () => {
+    const d = doc({ components: [box("a", 0, 4), box("b", 6, 60), box("c", 0, 10, 0, 40, 2), box("d", 12, 4, 0, 40, 2)] });
+    const r = engine.apply(d, [{ op: "move", component: "b", through: "c", before: "a" }]);
+    expect(r.ok, JSON.stringify(r.diagnostics)).toBe(true);
+    const placed = (id: string) => r.doc?.components.find((c) => c.id === id)?.at;
+    expect(placed("b")).toMatchObject({ page: 1, y: 0 });
+    expect(placed("c")).toMatchObject({ page: 1, y: 122 });
+    expect(placed("a")).toMatchObject({ page: 2, y: 6 });
+    expect(placed("d")).toMatchObject({ page: 2, y: 12 });
+    expect(r.summary).toMatch(/reading flow/);
+  });
+
+  it("moves a block after a component split across a page break", () => {
+    const rows = Array.from({ length: 20 }, (_, i) => [`Linha ${i}`, `${i}`]);
+    const d = doc({
+      components: [box("a", 0, 4), box("b", 6, 4), { id: "tab", type: "table", content: { columns: ["a", "b"], rows }, at: at(0, 110, 87) }, box("c", 20, 4, 0, 40, 2)],
+    });
+    expect(engine.layout(d).components.tab?.pieces.length).toBe(2);
+    const r = engine.apply(d, [{ op: "move", component: "b", after: "tab" }]);
+    expect(r.ok, JSON.stringify(r.diagnostics)).toBe(true);
+    for (const c of r.doc?.components ?? []) expect(Number.isFinite(c.at?.y) && Number.isFinite(c.at?.page), c.id).toBe(true);
+    const drawn = engine.layout(r.doc).components;
+    const tabEnd = drawn.tab?.pieces.at(-1);
+    expect(drawn.b?.box.page).toBe(tabEnd?.page);
+    expect(drawn.b?.box.y).toBeGreaterThanOrEqual((tabEnd?.y ?? 0) + (tabEnd?.h ?? 0));
+    expect(drawn.c?.box.y).toBeGreaterThan(drawn.b?.box.y ?? 0);
+  });
+
+  it("does not move a block across slides", () => {
+    const slides = [{ id: "s", kind: "page", size: "Slide", margin: 48 }];
+    const d = doc({ surfaces: slides, components: [box("a", 0, 4), box("b", 6, 4), box("c", 0, 4, 0, 40, 2)] });
+    const r = engine.apply(d, [{ op: "move", component: "b", through: "c", before: "a" }]);
+    expect(r.ok).toBe(false);
+    expect(r.diagnostics[0]?.message).toMatch(/whole slides with the page op/);
+  });
+
   it("refuses targets inside or beside the block, and needs exactly one of before/after", () => {
     const d = doc({ components: [box("a", 0, 4), box("b", 6, 4), box("side", 6, 4, 45), box("c", 12, 4)] });
     const cases: [unknown, RegExp][] = [
@@ -222,6 +258,51 @@ describe("move", () => {
       [{ op: "move", component: "a", before: "nope" }, /does not exist/],
       [{ op: "move", component: "a" }, /before or after/],
       [{ op: "move", component: "a", before: "b", after: "c" }, /before or after/],
+    ];
+    for (const [op, message] of cases) {
+      const r = engine.apply(d, [op as Op]);
+      expect(r.ok, JSON.stringify(op)).toBe(false);
+      expect(r.diagnostics[0]?.message).toMatch(message);
+    }
+  });
+});
+
+describe("columns", () => {
+  const text = (id: string, y: number) => ({ id, type: "text", content: { paragraphs: [lorem] }, at: at(0, y, 87) });
+  const placed = (d: unknown, id: string) => (d as LayoutDocument).components.find((c) => c.id === id)?.at;
+
+  it("stacks components in columns below an anchor, each right below the one before", () => {
+    const d = doc({ components: [{ id: "title", type: "text", content: { paragraphs: ["Q3"] }, at: at(0, 0, 87) }, text("a", 6), text("b", 14), text("c", 22), text("d", 30)] });
+    const r = engine.apply(d, [{ op: "columns", below: "title", columns: [["a", "b"], ["c", "d"]] }]);
+    expect(r.ok, JSON.stringify(r.diagnostics)).toBe(true);
+    const [a, b, c, dd] = ["a", "b", "c", "d"].map((id) => placed(r.doc, id) as { x: number; y: number; w: number });
+    const geo = engine.layout(r.doc).components;
+    expect(a!.y).toBe(c!.y);
+    expect(a!.x).toBe(0);
+    expect(c!.x).toBeGreaterThan(a!.x + a!.w - 1);
+    expect(b!.y).toBe((geo.a?.box.y ?? 0) + (geo.a?.box.h ?? 0) + 2);
+    expect(dd!.y).toBe((geo.c?.box.y ?? 0) + (geo.c?.box.h ?? 0) + 2);
+    // Two columns take fewer rows than one.
+    const bottom = Math.max(...Object.values(geo).map((g) => g.box.y + g.box.h));
+    expect(bottom).toBeLessThan(38);
+  });
+
+  it("one list reorders a stack, with widths and cols like row", () => {
+    const d = doc({ components: [text("a", 0), text("b", 8), text("c", 16)] });
+    const r = engine.apply(d, [{ op: "columns", page: 1, y: 0, cols: [1, 6], columns: [["c", "a", "b"]] }]);
+    expect(r.ok).toBe(true);
+    expect(placed(r.doc, "c")).toMatchObject({ y: 0, x: 0 });
+    expect((placed(r.doc, "a") as { y: number }).y).toBeGreaterThan(0);
+    expect((placed(r.doc, "b") as { y: number }).y).toBeGreaterThan((placed(r.doc, "a") as { y: number }).y);
+  });
+
+  it("refuses unknown ids, repeats and an anchor inside the columns", () => {
+    const d = doc({ components: [text("a", 0), text("b", 8)] });
+    const cases: [unknown, RegExp][] = [
+      [{ op: "columns", below: "a", columns: [["b", "nope"]] }, /do not exist/],
+      [{ op: "columns", below: "a", columns: [["b"], ["b"]] }, /twice/],
+      [{ op: "columns", below: "a", columns: [["a", "b"]] }, /is in the columns/],
+      [{ op: "columns", below: "a", widths: [1, 2], columns: [["b"]] }, /widths/],
     ];
     for (const [op, message] of cases) {
       const r = engine.apply(d, [op as Op]);
